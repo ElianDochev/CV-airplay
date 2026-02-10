@@ -1,44 +1,38 @@
-# GestureFusion — Dual-Hand Vision Game Controller (OpenCV + MediaPipe + Optional YOLO)
+# AirDrive — Vision Racing Controller (OpenCV + MediaPipe)
 
-Turn **two-hand gestures** into a **virtual game controller** (keyboard/mouse or gamepad) in real time.
+Turn **two-hand gestures** into a **racing game controller** (steering wheel + throttle + brake) in real time.
 Runs on **Windows + Linux**, supports **live demo while the script is running**, and can be extended with **custom gesture datasets + finetuning**.
 
 ## Features (Target)
 
 * 🎥 Real-time webcam hand tracking (2 hands)
-* ✋ Static gestures (open, fist, point, peace, thumbs-up, etc.)
-* 🌀 Optional dynamic gestures (swipe, circle, push/pull)
-* 🎮 Gesture → **controller actions**:
-
-  * Keyboard (WASD, space, etc.)
-  * Mouse (aim/click) (optional)
-  * Virtual gamepad (recommended for broad game support)
+* 🧭 Steering wheel pose from hand positions
+* ⛽ Throttle + brake from hand gestures/positions
+* 🎮 Virtual racing controller output (wheel + pedals)
 * 🧠 Two recognition modes:
 
   1. **Rule-based** (fastest, no training) using MediaPipe landmarks
-  2. **ML-based** (more scalable) finetune/classify gestures from landmarks and/or YOLO
+  2. **ML-based** (more scalable) finetune/classify gestures from landmarks
 
 ---
 
 ## Project Structure (Proposed)
 
 ```
-gesturefusion/
+
   README.md
   requirements.txt
   src/
-    app.py                      # main realtime loop (camera -> gesture -> controller)
+    app.py                      # main realtime loop (camera -> hands -> race controls)
     vision/
       mediapipe_hands.py         # hand detection + landmarks
-      yolo_hands.py              # optional YOLO hand detector
       preprocessing.py
     gestures/
       rules.py                   # rule-based gesture definitions
       features.py                # landmark -> feature vectors
       classifier.py              # ML classifier inference (optional)
-      temporal.py                # swipe/circle detection (optional)
+      temporal.py                # smoothing/temporal filters
     control/
-      keyboard_mouse.py          # OS input backend (pynput)
       gamepad.py                 # virtual gamepad backend (vgamepad / uinput)
       mapping.py                 # gesture->action mapping + combos
       debounce.py                # smoothing / cooldown / state machine
@@ -76,10 +70,11 @@ Implement simple gesture classification using landmarks:
 * [ ] Finger state detection (up/down for each finger)
 * [ ] Basic gesture set:
 
-  * `OPEN`, `FIST`, `POINT`, `PEACE`, `THUMB_UP`, `OK` (optional)
-* [ ] Two-hand combos:
+  * `OPEN`, `FIST`, `POINT`, `THUMB_UP`, `OK` (optional)
+* [ ] Two-hand driving poses:
 
-  * e.g. `Left=OPEN + Right=FIST => SPECIAL`
+  * both hands visible => steering wheel
+  * one hand visible => fallback steering
 * [ ] Temporal smoothing:
 
   * majority vote over last N frames
@@ -87,22 +82,13 @@ Implement simple gesture classification using landmarks:
 
   * avoid spamming actions every frame
 
-**Deliverable:** stable gesture prediction + combo logic.
+**Deliverable:** stable gesture prediction + driving pose logic.
 
 ---
 
-### 3) Controller Agent Tools (Gesture → Input) ✅
+### 3) Controller Output (Racing Wheel + Pedals) ✅
 
-#### Option A: Keyboard/Mouse Output (fastest to demo)
-
-* [ ] Use `pynput` to press/release keys
-* [ ] Support “hold” actions (move forward while POINT is active)
-* [ ] Support “tap” actions (jump once on PEACE trigger)
-* [ ] Optional mouse control: move cursor / click (aim & shoot)
-
-**Deliverable:** gestures control a game that supports keyboard/mouse.
-
-#### Option B: Virtual Gamepad (best compatibility)
+#### Virtual Racing Gamepad (best compatibility)
 
 * **Windows:** `vgamepad` (Xbox controller emulation)
 
@@ -110,11 +96,13 @@ Implement simple gesture classification using landmarks:
 
 * [ ] Implement `control/gamepad.py` backend
 
-* [ ] Map gestures to gamepad buttons/axes (A/B/X/Y, triggers, sticks)
+* [ ] Map steering to left stick X or wheel axis
+* [ ] Map throttle to right trigger (RT)
+* [ ] Map brake to left trigger (LT)
 
-* [ ] Add a “demo tester” mode: show current stick values + pressed buttons
+* [ ] Add a “demo tester” mode: show current steering angle + pedal values
 
-**Deliverable:** games detect it as a real controller.
+**Deliverable:** games detect it as a racing controller.
 
 ---
 
@@ -186,31 +174,29 @@ Use YOLO for direct gesture classification from images:
 * [ ] Provide “Demo Mode”:
 
   * show predicted gestures
-  * show which actions are being triggered
-  * show controller backend status (keyboard/gamepad)
+  * show steering + throttle + brake values
+  * show controller backend status (gamepad)
 
-**Deliverable:** You can run the script and control a game on both OS.
+**Deliverable:** You can run the script and control a racing game on both OS.
 
 ---
 
 ## Gesture Set (Example)
 
-**Left hand (movement):**
+**Steering:**
 
-* `POINT` = move forward (W)
-* `OPEN` = stop (release W)
-* `THUMB_UP` = sprint (Shift)
+* Both hands visible: steering angle from the line between hands
+* One hand visible: steering angle from wrist x-position
 
-**Right hand (actions):**
+**Throttle / Brake:**
 
-* `FIST` = shoot (mouse click / gamepad RT)
-* `PEACE` = jump (Space / gamepad A)
-* `OPEN` = reload (R / gamepad X)
+* `RIGHT FIST` = throttle (RT)
+* `LEFT FIST` = brake (LT)
+* `OPEN` = release pedal (0)
 
-**Combo examples:**
+**Assist gestures (optional):**
 
-* Left `OPEN` + Right `FIST` => Special ability (E)
-* Both `FIST` => Block (hold RMB)
+* `THUMB_UP` = handbrake / boost
 
 ---
 
@@ -234,20 +220,19 @@ Optional:
 * torch (if training MLP)
 * scikit-learn (if SVM/logreg)
 * onnxruntime (if ONNX inference)
-* ultralytics (if YOLO mode)
 
 ---
 
 ## Run (Demo)
 
 ```bash
-python -m src.app --backend keyboard --camera 0
+python -m src.app --backend gamepad --camera 0
 ```
 
 Example flags (planned):
 
-* `--backend keyboard|gamepad`
-* `--mode rules|ml|yolo`
+* `--backend gamepad`
+* `--mode rules|ml`
 * `--config configs/gestures.yaml`
 * `--show-ui 1`
 * `--record-data 0`
@@ -292,9 +277,8 @@ python -m src.train.train_classifier \
 
 ## Demo Ideas
 
-* Platformer game controlled by gestures (jump/shoot/move)
-* A “controller tester” page/app showing button presses
-* OBS overlay showing gestures + actions live
+* Racing game controlled by gestures (steer/accelerate/brake)
+* A “controller tester” page/app showing steering + pedals
 
 ---
 
@@ -303,4 +287,5 @@ python -m src.train.train_classifier \
 * This project is intended for **local demos** and accessibility/HCI research.
 * Do not use it for surveillance or identifying individuals.
 
+---
 ---
