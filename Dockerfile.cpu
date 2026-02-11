@@ -32,6 +32,7 @@ RUN apt-get update \
         libice6 \
         libfontconfig1 \
         libfreetype6 \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
@@ -40,5 +41,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY . /app
 
 ENV CONTROLLER=off
+ENV QT_QPA_FONTDIR=/usr/share/fonts/truetype/dejavu
 
 CMD ["bash", "-lc", "python -m src.app --no-show-ui --controller ${CONTROLLER}"]

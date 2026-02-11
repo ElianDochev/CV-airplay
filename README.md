@@ -88,9 +88,17 @@ set CONTROLLER=on
 
 Notes:
 
+- On Linux, allow local Docker access to X11 before running:
+
+  ```bash
+  xhost +local:
+  ```
+
 - Linux requires `/dev/video0` and `/dev/uinput` access.
 - You may need `sudo modprobe uinput` on the host.
 - The container runs headless by default with `--no-show-ui`.
+
+Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost` is not required. If you are running an X server (VcXsrv/Xming), allow local connections in that server's settings.
 
 ## Config
 

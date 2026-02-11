@@ -7,7 +7,10 @@ ENV TZ=UTC
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        build-essential \
+        linux-libc-dev \
         python3.11 \
+        python3.11-dev \
         python3.11-venv \
         python3-pip \
         git \
@@ -39,6 +42,7 @@ RUN apt-get update \
         libice6 \
         libfontconfig1 \
         libfreetype6 \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3.11 -m venv "$VIRTUAL_ENV" \
@@ -52,5 +56,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY . /app
 
 ENV CONTROLLER=off
+ENV QT_QPA_FONTDIR=/usr/share/fonts/truetype/dejavu
 
 CMD ["bash", "-lc", "python -m src.app --no-show-ui --controller ${CONTROLLER}"]
