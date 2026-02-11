@@ -13,6 +13,7 @@ steer_deadzone_deg: 5.0
 steer_smoothing_frames: 6
 # Gesture thresholds (finger extended detection)
 finger_extended_margin: 0.02
+finger_extended_radial_margin: 0.03
 
 # Control priorities
 brake_priority_over_accel: true

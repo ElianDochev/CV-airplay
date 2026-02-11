@@ -49,8 +49,11 @@ class ControllerState:
         return sum(self.steer_hist) / len(self.steer_hist)
 
     def smooth_action(self, value: bool, hist: deque) -> bool:
-        hist.append(1 if value else 0)
-        threshold = (len(hist) + 1) // 2
+        if not value:
+            hist.clear()
+            return False
+        hist.append(1)
+        threshold = (hist.maxlen + 1) // 2 if hist.maxlen else 1
         return sum(hist) >= threshold
 
 
@@ -89,7 +92,7 @@ def hand_label(handedness_entry) -> str:
     return getattr(classification, "category_name", getattr(classification, "label", "Unknown"))
 
 
-def draw_landmarks(frame, hand_lms, color=(0, 255, 0)) -> None:
+def render_landmarks(frame, hand_lms, color=(0, 255, 0)) -> None:
     landmarks = hand_lms.landmark if hasattr(hand_lms, "landmark") else hand_lms
     for lm in landmarks:
         x = int(lm.x * frame.shape[1])
@@ -172,6 +175,15 @@ def _get_landmark(hand_lms, idx: int):
     return hand_lms[idx]
 
 
+def lm_xyz(hand_lms, idx: int) -> Tuple[float, float, float]:
+    lm = _get_landmark(hand_lms, idx)
+    return (lm.x, lm.y, lm.z)
+
+
+def distance_3d(a: Tuple[float, float, float], b: Tuple[float, float, float]) -> float:
+    return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+
+
 def lm_xy(hand_lms, idx: int) -> Tuple[float, float]:
     lm = _get_landmark(hand_lms, idx)
     return (lm.x, lm.y)
@@ -181,28 +193,41 @@ def lm_xy(hand_lms, idx: int) -> Tuple[float, float]:
 # Finger state (extended / folded)
 # -------------------------
 
-def is_finger_extended(hand_lms, tip: int, pip: int, margin: float = 0.02) -> bool:
+def is_finger_extended(
+    hand_lms,
+    tip: int,
+    pip: int,
+    margin: float = 0.02,
+    radial_margin: float = 0.03,
+) -> bool:
     tip_y = _get_landmark(hand_lms, tip).y
     pip_y = _get_landmark(hand_lms, pip).y
-    return (pip_y - tip_y) > margin
+    y_extended = (pip_y - tip_y) > margin
+
+    wrist = lm_xyz(hand_lms, 0)
+    tip_dist = distance_3d(lm_xyz(hand_lms, tip), wrist)
+    pip_dist = distance_3d(lm_xyz(hand_lms, pip), wrist)
+    radial_extended = (tip_dist - pip_dist) > radial_margin
+
+    return y_extended or radial_extended
 
 
-def get_finger_states(hand_lms, margin: float) -> dict:
+def get_finger_states(hand_lms, margin: float, radial_margin: float) -> dict:
     return {
-        "index": is_finger_extended(hand_lms, 8, 6, margin),
-        "middle": is_finger_extended(hand_lms, 12, 10, margin),
-        "ring": is_finger_extended(hand_lms, 16, 14, margin),
-        "pinky": is_finger_extended(hand_lms, 20, 18, margin),
+        "index": is_finger_extended(hand_lms, 8, 6, margin, radial_margin),
+        "middle": is_finger_extended(hand_lms, 12, 10, margin, radial_margin),
+        "ring": is_finger_extended(hand_lms, 16, 14, margin, radial_margin),
+        "pinky": is_finger_extended(hand_lms, 20, 18, margin, radial_margin),
     }
 
 
-def is_open_palm(hand_lms, margin: float) -> bool:
-    fs = get_finger_states(hand_lms, margin)
+def is_open_palm(hand_lms, margin: float, radial_margin: float) -> bool:
+    fs = get_finger_states(hand_lms, margin, radial_margin)
     return fs["index"] and fs["middle"] and fs["ring"] and fs["pinky"]
 
 
-def is_pointing_index(hand_lms, margin: float) -> bool:
-    fs = get_finger_states(hand_lms, margin)
+def is_pointing_index(hand_lms, margin: float, radial_margin: float) -> bool:
+    fs = get_finger_states(hand_lms, margin, radial_margin)
     return fs["index"] and (not fs["middle"]) and (not fs["ring"]) and (not fs["pinky"])
 
 
@@ -230,14 +255,14 @@ def _select_hand(left, right, preferred: str):
     return right if right is not None else left
 
 
-def detect_brake(left, right, margin: float, preferred: str) -> bool:
+def detect_brake(left, right, margin: float, radial_margin: float, preferred: str) -> bool:
     hand = _select_hand(left, right, preferred)
-    return bool(hand and is_open_palm(hand, margin))
+    return bool(hand and is_open_palm(hand, margin, radial_margin))
 
 
-def detect_accel(left, right, margin: float, preferred: str) -> bool:
+def detect_accel(left, right, margin: float, radial_margin: float, preferred: str) -> bool:
     hand = _select_hand(left, right, preferred)
-    return bool(hand and is_pointing_index(hand, margin))
+    return bool(hand and is_pointing_index(hand, margin, radial_margin))
 
 
 def compute_controls(left, right, cfg: dict, state: ControllerState) -> Tuple[ControlOutput, str, Optional[float]]:
@@ -255,8 +280,9 @@ def compute_controls(left, right, cfg: dict, state: ControllerState) -> Tuple[Co
         using = "R-1hand"
 
     margin = cfg["finger_extended_margin"]
-    brake = detect_brake(left, right, margin, cfg["brake_preferred_hand"])
-    accel = detect_accel(left, right, margin, cfg["accel_preferred_hand"])
+    radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
+    brake = detect_brake(left, right, margin, radial_margin, cfg["brake_preferred_hand"])
+    accel = detect_accel(left, right, margin, radial_margin, cfg["accel_preferred_hand"])
 
     if cfg["brake_priority_over_accel"] and brake:
         accel = False
@@ -356,7 +382,7 @@ def run_camera_loop(
                     else:
                         right = hand_lms
                     if show_ui and draw_landmarks:
-                        draw_landmarks(frame, hand_lms)
+                        render_landmarks(frame, hand_lms)
 
             output, using, raw_angle = compute_controls(left, right, cfg, state)
             controller.update(output.steer, output.accel, output.brake)
