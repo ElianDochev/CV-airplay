@@ -23,4 +23,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
-CMD ["python", "-m", "src.app", "--no-show-ui"]
+ENV CONTROLLER=off
+
+CMD ["bash", "-lc", "python -m src.app --no-show-ui --controller ${CONTROLLER}"]

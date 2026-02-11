@@ -1,6 +1,9 @@
 services:
-  airdrive:
-    build: .
+  airdrive-cpu: &airdrive_common
+    profiles: ["cpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
     privileged: true
     device_cgroup_rules:
       - "c 81:* rmw" # /dev/video* for camera access
@@ -11,6 +14,22 @@ services:
       - DISPLAY=${DISPLAY}
       - SDL_VIDEODRIVER=x11
       - QT_X11_NO_MITSHM=1
+      - CONTROLLER=${CONTROLLER:-off}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
     command: ["python", "-m", "src.app", "--pygame-ui", "--show-ui"]
+
+  airdrive-gpu:
+    <<: *airdrive_common
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    environment:
+      - DISPLAY=${DISPLAY}
+      - SDL_VIDEODRIVER=x11
+      - QT_X11_NO_MITSHM=1
+      - CONTROLLER=${CONTROLLER:-off}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    runtime: nvidia

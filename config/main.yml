@@ -23,7 +23,7 @@ brake_preferred_hand: Right
 accel_preferred_hand: Left
 
 # Action smoothing
-action_smoothing_frames: 4
+action_smoothing_frames: 1
 
 # Runtime defaults
 camera_index: 0

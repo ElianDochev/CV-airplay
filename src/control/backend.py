@@ -52,6 +52,8 @@ def create_control_backend(controls_cfg: Dict[str, Any], backend_override: Optio
     control_type = _get(controls_cfg, "type", "none")
 
     if backend_override:
+        if backend_override == "none":
+            return NullControl()
         control_type = "gamepad"
         controls_cfg = dict(controls_cfg)
         controls_cfg.setdefault("gamepad", {})
