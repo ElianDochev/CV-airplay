@@ -49,7 +49,6 @@ Common flags:
 - `--controls-config config/controls.yml`: controller mapping and backend settings.
 - `--controller on|off`: enable or disable virtual controller output (auto-selects uinput on Linux or vgamepad on Windows).
 - `--show-ui/--no-show-ui`: enable or disable the on-screen preview window.
-- `--pygame-ui/--no-pygame-ui`: use the pygame overlay window instead of the OpenCV window.
 - `--draw-landmarks/--no-draw-landmarks`: render MediaPipe hand landmarks on the preview.
 - `--mirror-input/--no-mirror-input`: mirror the webcam feed for natural left/right control.
 - `--show-fps/--no-show-fps`: display FPS on the preview.

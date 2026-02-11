@@ -19,7 +19,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--show-ui", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--draw-landmarks", action=argparse.BooleanOptionalAction, default=None)
-    parser.add_argument("--pygame-ui", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--mirror-input", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--show-fps", action=argparse.BooleanOptionalAction, default=None)
     return parser
@@ -44,7 +43,6 @@ def main() -> None:
         camera_index=args.camera,
         show_ui=args.show_ui,
         draw_landmarks=args.draw_landmarks,
-        use_pygame_ui=args.pygame_ui,
         mirror_input=args.mirror_input,
         backend=backend,
         show_fps=args.show_fps,

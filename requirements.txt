@@ -4,4 +4,3 @@ numpy
 pynput
 python-uinput
 PyYAML
-pygame

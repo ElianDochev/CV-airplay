@@ -29,7 +29,6 @@ action_smoothing_frames: 1
 camera_index: 0
 mirror_input: true
 show_ui: true
-use_pygame_ui: true
 draw_landmarks: true
 show_fps: true
 window_name: MediaPipe Gesture Controller

@@ -20,9 +20,25 @@ RUN apt-get update \
         libsdl2-ttf-2.0-0 \
         libsdl2-mixer-2.0-0 \
         libx11-6 \
+        libx11-xcb1 \
         libxext6 \
         libxrender1 \
         libxtst6 \
+        libxcb1 \
+        libxcb-icccm4 \
+        libxcb-image0 \
+        libxcb-keysyms1 \
+        libxcb-randr0 \
+        libxcb-render-util0 \
+        libxcb-shape0 \
+        libxcb-sync1 \
+        libxcb-xfixes0 \
+        libxcb-xinerama0 \
+        libxkbcommon-x11-0 \
+        libsm6 \
+        libice6 \
+        libfontconfig1 \
+        libfreetype6 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3.11 -m venv "$VIRTUAL_ENV" \
