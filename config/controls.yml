@@ -1,0 +1,11 @@
+type: gamepad
+
+gamepad:
+  backend: uinput
+
+keyboard:
+  left_key: left
+  right_key: right
+  accel_key: w
+  brake_key: space
+  steer_threshold: 0.2

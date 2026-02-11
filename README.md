@@ -1,306 +1,110 @@
-# GestureFusion — Dual-Hand Vision Game Controller (OpenCV + MediaPipe + Optional YOLO)
+# AirDrive — Vision Racing Controller (OpenCV + MediaPipe)
 
-Turn **two-hand gestures** into a **virtual game controller** (keyboard/mouse or gamepad) in real time.
-Runs on **Windows + Linux**, supports **live demo while the script is running**, and can be extended with **custom gesture datasets + finetuning**.
+Turn two-hand gestures into a racing controller (steering + throttle + brake) in real time. The current implementation is a rule-based MediaPipe hand landmark pipeline with optional virtual controller backends.
 
-## Features (Target)
+## What It Does
 
-* 🎥 Real-time webcam hand tracking (2 hands)
-* ✋ Static gestures (open, fist, point, peace, thumbs-up, etc.)
-* 🌀 Optional dynamic gestures (swipe, circle, push/pull)
-* 🎮 Gesture → **controller actions**:
+- Tracks up to two hands from a webcam.
+- Computes steering angle from one or two hands.
+- Uses simple gesture rules for throttle and brake.
+- Sends output to a virtual controller backend (uinput on Linux, vgamepad on Windows).
 
-  * Keyboard (WASD, space, etc.)
-  * Mouse (aim/click) (optional)
-  * Virtual gamepad (recommended for broad game support)
-* 🧠 Two recognition modes:
-
-  1. **Rule-based** (fastest, no training) using MediaPipe landmarks
-  2. **ML-based** (more scalable) finetune/classify gestures from landmarks and/or YOLO
-
----
-
-## Project Structure (Proposed)
+## Project Structure
 
 ```
-gesturefusion/
-  README.md
-  requirements.txt
-  src/
-    app.py                      # main realtime loop (camera -> gesture -> controller)
-    vision/
-      mediapipe_hands.py         # hand detection + landmarks
-      yolo_hands.py              # optional YOLO hand detector
-      preprocessing.py
-    gestures/
-      rules.py                   # rule-based gesture definitions
-      features.py                # landmark -> feature vectors
-      classifier.py              # ML classifier inference (optional)
-      temporal.py                # swipe/circle detection (optional)
-    control/
-      keyboard_mouse.py          # OS input backend (pynput)
-      gamepad.py                 # virtual gamepad backend (vgamepad / uinput)
-      mapping.py                 # gesture->action mapping + combos
-      debounce.py                # smoothing / cooldown / state machine
-    data/
-      collect.py                 # data collection tool (record landmarks, labels)
-      viewer.py                  # quick dataset inspection
-    train/
-      train_classifier.py        # train gesture classifier from landmarks
-      export.py                  # export model (onnx etc.)
-  assets/
-    demo.gif
-  configs/
-    gestures.yaml                # mapping config + thresholds
+README.md
+requirements.txt
+docker-compose.yml
+Dockerfile.cpu
+Dockerfile.gpu
+config/
+  main.yml
+  controls.yml
+notebooks/
+  00_env_check.ipynb
+  01_mediapipe_hands.ipynb
+  02_landmarks_analysis.ipynb
+  03_rule_based_gestures.ipynb
+src/
+  app.py
+  gesture_controller.py
+  ulits.py
+  control/
+    backend.py
+    gamepad.py
+    keyboard.py
+    mapping.py
 ```
 
----
-
-## Roadmap / Implementation Checklist
-
-### 1) Baseline Real-Time Hand Tracking ✅
-
-* [ ] OpenCV webcam loop (FPS overlay)
-* [ ] MediaPipe Hands: detect up to 2 hands + 21 landmarks
-* [ ] Identify handedness (Left / Right)
-* [ ] Draw landmarks + show current recognized gesture per hand
-
-**Deliverable:** `src/app.py` runs and prints `Left: OPEN, Right: FIST` at 20–60 FPS.
-
----
-
-### 2) Gesture Recognition v1 (Rule-Based) ✅
-
-Implement simple gesture classification using landmarks:
-
-* [ ] Finger state detection (up/down for each finger)
-* [ ] Basic gesture set:
-
-  * `OPEN`, `FIST`, `POINT`, `PEACE`, `THUMB_UP`, `OK` (optional)
-* [ ] Two-hand combos:
-
-  * e.g. `Left=OPEN + Right=FIST => SPECIAL`
-* [ ] Temporal smoothing:
-
-  * majority vote over last N frames
-* [ ] Debounce + cooldown:
-
-  * avoid spamming actions every frame
-
-**Deliverable:** stable gesture prediction + combo logic.
-
----
-
-### 3) Controller Agent Tools (Gesture → Input) ✅
-
-#### Option A: Keyboard/Mouse Output (fastest to demo)
-
-* [ ] Use `pynput` to press/release keys
-* [ ] Support “hold” actions (move forward while POINT is active)
-* [ ] Support “tap” actions (jump once on PEACE trigger)
-* [ ] Optional mouse control: move cursor / click (aim & shoot)
-
-**Deliverable:** gestures control a game that supports keyboard/mouse.
-
-#### Option B: Virtual Gamepad (best compatibility)
-
-* **Windows:** `vgamepad` (Xbox controller emulation)
-
-* **Linux:** `uinput` / `python-uinput` (virtual controller device)
-
-* [ ] Implement `control/gamepad.py` backend
-
-* [ ] Map gestures to gamepad buttons/axes (A/B/X/Y, triggers, sticks)
-
-* [ ] Add a “demo tester” mode: show current stick values + pressed buttons
-
-**Deliverable:** games detect it as a real controller.
-
----
-
-### 4) Data Collection (for ML training / finetuning) ✅
-
-Even if you start rule-based, collecting data makes your project *CV-ready*.
-
-Collect **landmark-based samples**:
-
-* [ ] Build `src/data/collect.py`
-* [ ] Hotkey labeling (press `1..9` to label current gesture)
-* [ ] Save per-frame:
-
-  * 21 landmarks * (x,y,z) per hand (and handedness)
-  * optional bounding box, timestamp, FPS, lighting
-* [ ] Save format: CSV or JSONL (recommended: JSONL)
-* [ ] Dataset split: train/val/test
-* [ ] Record multiple sessions:
-
-  * different lighting, backgrounds, distances, users
-
-**Deliverable:** reproducible dataset with clear labels.
-
----
-
-### 5) AI Training / Finetuning ✅
-
-You have two good ML approaches:
-
-#### Approach 1: Landmark Classifier (Recommended)
-
-Train a classifier on MediaPipe landmarks (fast + robust):
-
-* [ ] Convert landmarks → features:
-
-  * normalized coordinates (relative to wrist)
-  * pairwise distances/angles (optional)
-* [ ] Train model:
-
-  * baseline: Logistic Regression / SVM (very fast)
-  * stronger: small MLP (PyTorch)
-* [ ] Evaluate:
-
-  * accuracy, confusion matrix
-  * latency & FPS impact
-* [ ] Export model:
-
-  * pickle (sklearn) or ONNX (portable)
-
-**Deliverable:** `train/train_classifier.py` produces `models/gesture.onnx` or `models/gesture.pkl`.
-
-#### Approach 2: YOLO Finetune (Optional)
-
-Use YOLO for direct gesture classification from images:
-
-* [ ] Collect image dataset (hands cropped)
-* [ ] Annotate gesture classes
-* [ ] Train YOLOv8n for speed
-* [ ] Use YOLO inference live
-
-**Deliverable:** works but usually heavier than landmarks for gestures.
-
----
-
-### 6) Cross-Platform Demo (Windows + Linux) ✅
-
-* [ ] Ensure consistent dependencies
-* [ ] Provide separate setup instructions
-* [ ] Provide “Demo Mode”:
-
-  * show predicted gestures
-  * show which actions are being triggered
-  * show controller backend status (keyboard/gamepad)
-
-**Deliverable:** You can run the script and control a game on both OS.
-
----
-
-## Gesture Set (Example)
-
-**Left hand (movement):**
-
-* `POINT` = move forward (W)
-* `OPEN` = stop (release W)
-* `THUMB_UP` = sprint (Shift)
-
-**Right hand (actions):**
-
-* `FIST` = shoot (mouse click / gamepad RT)
-* `PEACE` = jump (Space / gamepad A)
-* `OPEN` = reload (R / gamepad X)
-
-**Combo examples:**
-
-* Left `OPEN` + Right `FIST` => Special ability (E)
-* Both `FIST` => Block (hold RMB)
-
----
-
-## Installation
-
-### Common
+## Local Run
 
 ```bash
 pip install -r requirements.txt
+python -m src.app --controller on --camera 0 --show-ui
 ```
 
-`requirements.txt` (starter):
+Common flags:
 
-* opencv-python
-* mediapipe
-* numpy
-* pynput
+- `--config config/main.yml`: main runtime config (smoothing, thresholds, UI defaults).
+- `--controls-config config/controls.yml`: controller mapping and backend settings.
+- `--controller on|off`: enable or disable virtual controller output (auto-selects uinput on Linux or vgamepad on Windows).
+- `--show-ui/--no-show-ui`: enable or disable the on-screen preview window.
+- `--draw-landmarks/--no-draw-landmarks`: render MediaPipe hand landmarks on the preview.
+- `--mirror-input/--no-mirror-input`: mirror the webcam feed for natural left/right control.
+- `--show-fps/--no-show-fps`: display FPS on the preview.
 
-Optional:
+Controls while running:
 
-* torch (if training MLP)
-* scikit-learn (if SVM/logreg)
-* onnxruntime (if ONNX inference)
-* ultralytics (if YOLO mode)
+- `c` calibrates neutral steering (center)
+- two thumbs up (both hands) auto-calibrates neutral steering
+- `q` quits
 
----
+## Docker (CPU and GPU Profiles)
 
-## Run (Demo)
+CPU (Python 3.12):
 
 ```bash
-python -m src.app --backend keyboard --camera 0
+export CONTROLLER=on
+docker compose --profile cpu up --build
 ```
 
-Example flags (planned):
-
-* `--backend keyboard|gamepad`
-* `--mode rules|ml|yolo`
-* `--config configs/gestures.yaml`
-* `--show-ui 1`
-* `--record-data 0`
-
----
-
-## Data Collection
+GPU (CUDA 11.8, Python 3.11):
 
 ```bash
-python -m src.data.collect --out data/sessions/session_01.jsonl
+export CONTROLLER=on
+docker compose --profile gpu up --build
 ```
 
-Planned controls:
+Windows (PowerShell):
 
-* Press `1..9` to set label
-* Press `r` to start/stop recording
-* Press `q` to quit
-
----
-
-## Training
-
-Landmark classifier:
-
-```bash
-python -m src.train.train_classifier \
-  --data data/sessions \
-  --out models/gesture.onnx
+```powershell
+$env:CONTROLLER = "on"
 ```
 
----
+Windows (CMD):
 
-## Metrics to Report (For CV)
+```bat
+set CONTROLLER=on
+```
 
-* FPS on CPU and GPU (if applicable)
-* Gesture accuracy / confusion matrix
-* Latency from camera frame → action trigger
-* Robustness: lighting + background variation
-* Cross-platform support (Windows + Linux)
+Notes:
 
----
+- On Linux, allow local Docker access to X11 before running:
 
-## Demo Ideas
+  ```bash
+  xhost +local:
+  ```
 
-* Platformer game controlled by gestures (jump/shoot/move)
-* A “controller tester” page/app showing button presses
-* OBS overlay showing gestures + actions live
+- Linux requires `/dev/video0` and `/dev/uinput` access.
+- You may need `sudo modprobe uinput` on the host.
+- The container runs headless by default with `--no-show-ui`.
 
----
+Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost` is not required. If you are running an X server (VcXsrv/Xming), allow local connections in that server's settings.
 
-## Safety Notes
+## Config
 
-* This project is intended for **local demos** and accessibility/HCI research.
-* Do not use it for surveillance or identifying individuals.
+The main settings live in `config/main.yml` and control thresholds, smoothing, UI flags, and camera defaults. Control mappings are in `config/controls.yml`.
 
----
+## Notebooks
+
+The `notebooks/` directory contains exploration and rule-based gesture analysis. These are optional and not required for running the app.
