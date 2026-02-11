@@ -14,8 +14,8 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from .control.gamepad import create_gamepad_backend
-from .ulits import load_config
+from .control.backend import create_control_backend
+from .ulits import load_config, load_controls_config
 
 
 DEFAULT_MODEL_URL = (
@@ -294,6 +294,7 @@ def compute_controls(left, right, cfg: dict, state: ControllerState) -> Tuple[Co
 
 def run_camera_loop(
     config_path: str | None = None,
+    controls_config_path: str | None = None,
     camera_index: int | None = None,
     show_ui: bool | None = None,
     use_pygame_ui: bool | None = None,
@@ -303,6 +304,7 @@ def run_camera_loop(
     show_fps: bool | None = None,
 ) -> None:
     cfg = load_config(config_path)
+    controls_cfg = load_controls_config(controls_config_path)
     state = ControllerState(
         cfg["steer_smoothing_frames"],
         get_cfg(cfg, "action_smoothing_frames", 1),
@@ -315,8 +317,8 @@ def run_camera_loop(
     mirror_input = mirror_input if mirror_input is not None else get_cfg(cfg, "mirror_input", True)
     show_fps = show_fps if show_fps is not None else get_cfg(cfg, "show_fps", True)
     window_name = get_cfg(cfg, "window_name", "MediaPipe Gesture Controller")
-    backend_name = backend if backend is not None else get_cfg(cfg, "controller_backend", "none")
-    gamepad = create_gamepad_backend(backend_name)
+    backend_name = backend if backend is not None else get_cfg(cfg, "controller_backend", None)
+    controller = create_control_backend(controls_cfg, backend_name)
     overlay = PygameOverlay(window_name) if show_ui and use_pygame_ui else None
 
     cap = cv2.VideoCapture(camera_index)
@@ -357,7 +359,7 @@ def run_camera_loop(
                         draw_landmarks(frame, hand_lms)
 
             output, using, raw_angle = compute_controls(left, right, cfg, state)
-            gamepad.update(output.steer, output.accel, output.brake)
+            controller.update(output.steer, output.accel, output.brake)
 
             if show_ui and overlay is None:
                 cv2.putText(
@@ -436,7 +438,7 @@ def run_camera_loop(
     finally:
         detector.close()
         cap.release()
-        gamepad.close()
+        controller.close()
         if overlay is not None:
             overlay.close()
         if show_ui and overlay is None:

@@ -9,6 +9,8 @@ services:
       - /dev/uinput:/dev/uinput
     environment:
       - DISPLAY=${DISPLAY}
+      - SDL_VIDEODRIVER=x11
+      - QT_X11_NO_MITSHM=1
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-    command: ["python", "-m", "src.app", "--backend", "uinput", "--no-show-ui"]
+    command: ["python", "-m", "src.app", "--pygame-ui", "--show-ui"]

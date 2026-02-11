@@ -8,6 +8,14 @@ RUN apt-get update \
         linux-libc-dev \
         libgl1 \
         libglib2.0-0 \
+        libsdl2-2.0-0 \
+        libsdl2-image-2.0-0 \
+        libsdl2-ttf-2.0-0 \
+        libsdl2-mixer-2.0-0 \
+        libx11-6 \
+        libxext6 \
+        libxrender1 \
+        libxtst6 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt

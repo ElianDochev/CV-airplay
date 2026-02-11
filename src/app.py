@@ -8,6 +8,7 @@ from .gesture_controller import run_camera_loop
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AirDrive gesture controller")
     parser.add_argument("--config", default=None, help="Path to config file")
+    parser.add_argument("--controls-config", default=None, help="Path to controls config file")
     parser.add_argument("--camera", type=int, default=None, help="Camera index")
     parser.add_argument(
         "--backend",
@@ -27,6 +28,7 @@ def main() -> None:
     args = build_parser().parse_args()
     run_camera_loop(
         config_path=args.config,
+        controls_config_path=args.controls_config,
         camera_index=args.camera,
         show_ui=args.show_ui,
         draw_landmarks=args.draw_landmarks,
