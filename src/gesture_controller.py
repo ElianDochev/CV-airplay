@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import cv2
+import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -94,6 +95,53 @@ def draw_landmarks(frame, hand_lms, color=(0, 255, 0)) -> None:
         x = int(lm.x * frame.shape[1])
         y = int(lm.y * frame.shape[0])
         cv2.circle(frame, (x, y), 3, color, -1)
+
+
+class PygameOverlay:
+    def __init__(self, window_name: str):
+        import pygame
+
+        self.pygame = pygame
+        pygame.init()
+        pygame.font.init()
+        self.window_name = window_name
+        self.surface = None
+        self.font = pygame.font.SysFont("Arial", 20)
+
+    def ensure_surface(self, width: int, height: int):
+        if self.surface is None:
+            self.surface = self.pygame.display.set_mode((width, height))
+            self.pygame.display.set_caption(self.window_name)
+
+    def process_events(self):
+        quit_requested = False
+        calibrate = False
+        for event in self.pygame.event.get():
+            if event.type == self.pygame.QUIT:
+                quit_requested = True
+            if event.type == self.pygame.KEYDOWN:
+                if event.key == self.pygame.K_q:
+                    quit_requested = True
+                if event.key == self.pygame.K_c:
+                    calibrate = True
+        return quit_requested, calibrate
+
+    def update(self, frame_bgr, lines):
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        frame_surface = self.pygame.surfarray.make_surface(np.swapaxes(rgb, 0, 1))
+        self.ensure_surface(frame_surface.get_width(), frame_surface.get_height())
+        self.surface.blit(frame_surface, (0, 0))
+        y = 10
+        for line in lines:
+            text_surface = self.font.render(line, True, (255, 255, 255))
+            self.surface.blit(text_surface, (10, y))
+            y += 24
+        self.pygame.display.flip()
+
+    def close(self):
+        self.pygame.display.quit()
+        self.pygame.font.quit()
+        self.pygame.quit()
 
 
 # -------------------------
@@ -248,6 +296,7 @@ def run_camera_loop(
     config_path: str | None = None,
     camera_index: int | None = None,
     show_ui: bool | None = None,
+    use_pygame_ui: bool | None = None,
     draw_landmarks: bool | None = None,
     mirror_input: bool | None = None,
     backend: str | None = None,
@@ -261,12 +310,14 @@ def run_camera_loop(
 
     camera_index = camera_index if camera_index is not None else get_cfg(cfg, "camera_index", 0)
     show_ui = show_ui if show_ui is not None else get_cfg(cfg, "show_ui", True)
+    use_pygame_ui = use_pygame_ui if use_pygame_ui is not None else get_cfg(cfg, "use_pygame_ui", False)
     draw_landmarks = draw_landmarks if draw_landmarks is not None else get_cfg(cfg, "draw_landmarks", True)
     mirror_input = mirror_input if mirror_input is not None else get_cfg(cfg, "mirror_input", True)
     show_fps = show_fps if show_fps is not None else get_cfg(cfg, "show_fps", True)
     window_name = get_cfg(cfg, "window_name", "MediaPipe Gesture Controller")
     backend_name = backend if backend is not None else get_cfg(cfg, "controller_backend", "none")
     gamepad = create_gamepad_backend(backend_name)
+    overlay = PygameOverlay(window_name) if show_ui and use_pygame_ui else None
 
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
@@ -308,7 +359,7 @@ def run_camera_loop(
             output, using, raw_angle = compute_controls(left, right, cfg, state)
             gamepad.update(output.steer, output.accel, output.brake)
 
-            if show_ui:
+            if show_ui and overlay is None:
                 cv2.putText(
                     frame,
                     f"Steer: {output.steer:+.2f}  (src: {using})",
@@ -359,6 +410,26 @@ def run_camera_loop(
                 if key == ord("c") and raw_angle is not None:
                     state.set_neutral(raw_angle)
                     state.last_calib_time = time.time()
+            elif show_ui and overlay is not None:
+                text_lines = [
+                    f"Steer: {output.steer:+.2f}  (src: {using})",
+                    f"Accel: {output.accel}  Brake: {output.brake}",
+                    f"Neutral deg: {state.neutral_deg:.1f}" if state.neutral_deg is not None else "Neutral: None",
+                ]
+                if show_fps:
+                    curr_time = time.time()
+                    fps = 1 / (curr_time - prev_time) if prev_time else 0
+                    prev_time = curr_time
+                    text_lines.append(f"FPS: {int(fps)}")
+                overlay.update(frame, text_lines)
+                quit_requested, calibrate = overlay.process_events()
+                if calibrate and raw_angle is not None:
+                    state.set_neutral(raw_angle)
+                    state.last_calib_time = time.time()
+                if quit_requested:
+                    show_ui = False
+                    overlay.close()
+                    overlay = None
             else:
                 if raw_angle is not None and state.neutral_deg is None:
                     state.set_neutral(raw_angle)
@@ -366,7 +437,9 @@ def run_camera_loop(
         detector.close()
         cap.release()
         gamepad.close()
-        if show_ui:
+        if overlay is not None:
+            overlay.close()
+        if show_ui and overlay is None:
             cv2.destroyAllWindows()
 
 
