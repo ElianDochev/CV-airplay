@@ -1,0 +1,14 @@
+services:
+  airdrive:
+    build: .
+    privileged: true
+    device_cgroup_rules:
+      - "c 81:* rmw" # /dev/video* for camera access
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/uinput:/dev/uinput
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    command: ["python", "-m", "src.app", "--backend", "uinput", "--no-show-ui"]

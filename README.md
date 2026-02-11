@@ -226,16 +226,28 @@ Optional:
 ## Run (Demo)
 
 ```bash
-python -m src.app --backend gamepad --camera 0
+python -m src.app --backend uinput --camera 0
 ```
 
-Example flags (planned):
+Example flags:
 
-* `--backend gamepad`
-* `--mode rules|ml`
-* `--config configs/gestures.yaml`
-* `--show-ui 1`
-* `--record-data 0`
+* `--backend none|uinput|vgamepad`
+* `--config config/main.yml`
+* `--show-ui/--no-show-ui`
+* `--draw-landmarks/--no-draw-landmarks`
+* `--mirror-input/--no-mirror-input`
+* `--show-fps/--no-show-fps`
+
+## Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Notes:
+- Linux requires `/dev/video0` and `/dev/uinput` access.
+- You may need `sudo modprobe uinput` on the host.
+- The container runs headless by default with `--no-show-ui`.
 
 ---
 

@@ -2,18 +2,25 @@ from __future__ import annotations
 
 import math
 import time
+import urllib.request
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Tuple
 
 import cv2
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 
-from ulits import load_config
+from .control.gamepad import create_gamepad_backend
+from .ulits import load_config
 
 
-mp_hands = mp.solutions.hands
-mp_draw = mp.solutions.drawing_utils
+DEFAULT_MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/"
+    "hand_landmarker.task"
+)
 
 
 @dataclass
@@ -24,9 +31,11 @@ class ControlOutput:
 
 
 class ControllerState:
-    def __init__(self, smooth_n: int):
+    def __init__(self, smooth_n: int, action_smooth_n: int):
         self.neutral_deg: Optional[float] = None
         self.steer_hist = deque(maxlen=smooth_n)
+        self.accel_hist = deque(maxlen=action_smooth_n)
+        self.brake_hist = deque(maxlen=action_smooth_n)
         self.last = ControlOutput(steer=0.0, accel=False, brake=False)
         self.last_calib_time = 0.0
 
@@ -37,6 +46,54 @@ class ControllerState:
     def smooth_steer(self, steer: float) -> float:
         self.steer_hist.append(steer)
         return sum(self.steer_hist) / len(self.steer_hist)
+
+    def smooth_action(self, value: bool, hist: deque) -> bool:
+        hist.append(1 if value else 0)
+        threshold = (len(hist) + 1) // 2
+        return sum(hist) >= threshold
+
+
+def get_cfg(cfg: dict, key: str, default):
+    return cfg[key] if key in cfg else default
+
+
+def ensure_model(model_path: Path, model_url: str) -> None:
+    if model_path.exists():
+        return
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    urllib.request.urlretrieve(model_url, model_path)
+
+
+def build_hand_landmarker(cfg: dict) -> vision.HandLandmarker:
+    model_path = Path(get_cfg(cfg, "hand_landmarker_model_path", "models/hand_landmarker.task"))
+    model_url = get_cfg(cfg, "hand_landmarker_model_url", DEFAULT_MODEL_URL)
+    ensure_model(model_path, model_url)
+
+    base_options = python.BaseOptions(model_asset_path=str(model_path))
+    options = vision.HandLandmarkerOptions(
+        base_options=base_options,
+        num_hands=cfg["max_num_hands"],
+        min_hand_detection_confidence=cfg["min_detection_confidence"],
+        min_hand_presence_confidence=cfg["min_detection_confidence"],
+        min_tracking_confidence=cfg["min_tracking_confidence"],
+        running_mode=vision.RunningMode.VIDEO,
+    )
+    return vision.HandLandmarker.create_from_options(options)
+
+
+def hand_label(handedness_entry) -> str:
+    if not handedness_entry:
+        return "Unknown"
+    classification = handedness_entry[0]
+    return getattr(classification, "category_name", getattr(classification, "label", "Unknown"))
+
+
+def draw_landmarks(frame, hand_lms, color=(0, 255, 0)) -> None:
+    landmarks = hand_lms.landmark if hasattr(hand_lms, "landmark") else hand_lms
+    for lm in landmarks:
+        x = int(lm.x * frame.shape[1])
+        y = int(lm.y * frame.shape[0])
+        cv2.circle(frame, (x, y), 3, color, -1)
 
 
 # -------------------------
@@ -61,8 +118,14 @@ def normalize_angle_deg(angle_deg: float) -> float:
     return (angle_deg + 180.0) % 360.0 - 180.0
 
 
+def _get_landmark(hand_lms, idx: int):
+    if hasattr(hand_lms, "landmark"):
+        return hand_lms.landmark[idx]
+    return hand_lms[idx]
+
+
 def lm_xy(hand_lms, idx: int) -> Tuple[float, float]:
-    lm = hand_lms.landmark[idx]
+    lm = _get_landmark(hand_lms, idx)
     return (lm.x, lm.y)
 
 
@@ -71,8 +134,8 @@ def lm_xy(hand_lms, idx: int) -> Tuple[float, float]:
 # -------------------------
 
 def is_finger_extended(hand_lms, tip: int, pip: int, margin: float = 0.02) -> bool:
-    tip_y = hand_lms.landmark[tip].y
-    pip_y = hand_lms.landmark[pip].y
+    tip_y = _get_landmark(hand_lms, tip).y
+    pip_y = _get_landmark(hand_lms, pip).y
     return (pip_y - tip_y) > margin
 
 
@@ -152,6 +215,14 @@ def compute_controls(left, right, cfg: dict, state: ControllerState) -> Tuple[Co
     elif accel:
         brake = False
 
+    brake = state.smooth_action(brake, state.brake_hist)
+    accel = state.smooth_action(accel, state.accel_hist)
+
+    if cfg["brake_priority_over_accel"] and brake:
+        accel = False
+    elif accel:
+        brake = False
+
     steer = 0.0
     if raw_angle is not None:
         if state.neutral_deg is None:
@@ -173,86 +244,130 @@ def compute_controls(left, right, cfg: dict, state: ControllerState) -> Tuple[Co
     return output, using, raw_angle
 
 
-def run_camera_loop(config_path: str | None = None) -> None:
+def run_camera_loop(
+    config_path: str | None = None,
+    camera_index: int | None = None,
+    show_ui: bool | None = None,
+    draw_landmarks: bool | None = None,
+    mirror_input: bool | None = None,
+    backend: str | None = None,
+    show_fps: bool | None = None,
+) -> None:
     cfg = load_config(config_path)
-    state = ControllerState(cfg["steer_smoothing_frames"])
+    state = ControllerState(
+        cfg["steer_smoothing_frames"],
+        get_cfg(cfg, "action_smoothing_frames", 1),
+    )
 
-    cap = cv2.VideoCapture(0)
+    camera_index = camera_index if camera_index is not None else get_cfg(cfg, "camera_index", 0)
+    show_ui = show_ui if show_ui is not None else get_cfg(cfg, "show_ui", True)
+    draw_landmarks = draw_landmarks if draw_landmarks is not None else get_cfg(cfg, "draw_landmarks", True)
+    mirror_input = mirror_input if mirror_input is not None else get_cfg(cfg, "mirror_input", True)
+    show_fps = show_fps if show_fps is not None else get_cfg(cfg, "show_fps", True)
+    window_name = get_cfg(cfg, "window_name", "MediaPipe Gesture Controller")
+    backend_name = backend if backend is not None else get_cfg(cfg, "controller_backend", "none")
+    gamepad = create_gamepad_backend(backend_name)
+
+    cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
         raise RuntimeError("Could not open webcam")
 
-    with mp_hands.Hands(
-        max_num_hands=cfg["max_num_hands"],
-        model_complexity=cfg["model_complexity"],
-        min_detection_confidence=cfg["min_detection_confidence"],
-        min_tracking_confidence=cfg["min_tracking_confidence"],
-    ) as hands:
+    detector = build_hand_landmarker(cfg)
+    try:
         print("Controls:")
         print("  c = calibrate neutral steering (center)")
         print("  q = quit")
+
+        prev_time = 0.0
 
         while True:
             ok, frame = cap.read()
             if not ok:
                 break
 
-            frame = cv2.flip(frame, 1)
+            if mirror_input:
+                frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            res = hands.process(rgb)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            timestamp_ms = int(time.time() * 1000)
+            res = detector.detect_for_video(mp_image, timestamp_ms)
 
             left = None
             right = None
 
-            if res.multi_hand_landmarks and res.multi_handedness:
-                for hand_lms, handed in zip(res.multi_hand_landmarks, res.multi_handedness):
-                    label = handed.classification[0].label
+            if res.hand_landmarks and res.handedness:
+                for hand_lms, handed in zip(res.hand_landmarks, res.handedness):
+                    label = hand_label(handed)
                     if label == "Left":
                         left = hand_lms
                     else:
                         right = hand_lms
-                    mp_draw.draw_landmarks(frame, hand_lms, mp_hands.HAND_CONNECTIONS)
+                    if show_ui and draw_landmarks:
+                        draw_landmarks(frame, hand_lms)
 
             output, using, raw_angle = compute_controls(left, right, cfg, state)
+            gamepad.update(output.steer, output.accel, output.brake)
 
-            cv2.putText(
-                frame,
-                f"Steer: {output.steer:+.2f}  (src: {using})",
-                (20, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 255, 255),
-                2,
-            )
-            cv2.putText(
-                frame,
-                f"Accel: {output.accel}  Brake: {output.brake}",
-                (20, 65),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 255, 255),
-                2,
-            )
-            cv2.putText(
-                frame,
-                f"Neutral deg: {state.neutral_deg:.1f}" if state.neutral_deg is not None else "Neutral: None",
-                (20, 100),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 255, 255),
-                2,
-            )
+            if show_ui:
+                cv2.putText(
+                    frame,
+                    f"Steer: {output.steer:+.2f}  (src: {using})",
+                    (20, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (255, 255, 255),
+                    2,
+                )
+                cv2.putText(
+                    frame,
+                    f"Accel: {output.accel}  Brake: {output.brake}",
+                    (20, 65),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (255, 255, 255),
+                    2,
+                )
+                cv2.putText(
+                    frame,
+                    f"Neutral deg: {state.neutral_deg:.1f}" if state.neutral_deg is not None else "Neutral: None",
+                    (20, 100),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2,
+                )
 
-            cv2.imshow("MediaPipe Gesture Controller", frame)
+                if show_fps:
+                    curr_time = time.time()
+                    fps = 1 / (curr_time - prev_time) if prev_time else 0
+                    prev_time = curr_time
+                    cv2.putText(
+                        frame,
+                        f"FPS: {int(fps)}",
+                        (20, 135),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (255, 255, 255),
+                        2,
+                    )
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
-            if key == ord("c") and raw_angle is not None:
-                state.set_neutral(raw_angle)
-                state.last_calib_time = time.time()
+                cv2.imshow(window_name, frame)
 
-    cap.release()
-    cv2.destroyAllWindows()
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    break
+                if key == ord("c") and raw_angle is not None:
+                    state.set_neutral(raw_angle)
+                    state.last_calib_time = time.time()
+            else:
+                if raw_angle is not None and state.neutral_deg is None:
+                    state.set_neutral(raw_angle)
+    finally:
+        detector.close()
+        cap.release()
+        gamepad.close()
+        if show_ui:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

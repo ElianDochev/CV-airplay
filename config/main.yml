@@ -3,13 +3,14 @@ max_num_hands: 2
 model_complexity: 1
 min_detection_confidence: 0.6
 min_tracking_confidence: 0.6
+hand_landmarker_model_path: models/hand_landmarker.task
+hand_landmarker_model_url: https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
 
 # Steering behavior
 use_two_hand_when_possible: true
 max_steer_deg: 60.0
 steer_deadzone_deg: 5.0
 steer_smoothing_frames: 6
-
 # Gesture thresholds (finger extended detection)
 finger_extended_margin: 0.02
 
@@ -19,3 +20,15 @@ brake_priority_over_accel: true
 # Preferred hands (guidance, not strict)
 brake_preferred_hand: Right
 accel_preferred_hand: Left
+
+# Action smoothing
+action_smoothing_frames: 4
+
+# Runtime defaults
+camera_index: 0
+mirror_input: true
+show_ui: true
+draw_landmarks: true
+show_fps: true
+window_name: MediaPipe Gesture Controller
+controller_backend: none
