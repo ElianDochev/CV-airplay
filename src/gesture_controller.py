@@ -173,6 +173,12 @@ def get_finger_states(hand_lms, margin: float, radial_margin: float) -> dict:
     }
 
 
+def is_thumb_up(hand_lms, margin: float, radial_margin: float) -> bool:
+    thumb_extended = is_finger_extended(hand_lms, 4, 3, margin, radial_margin)
+    fs = get_finger_states(hand_lms, margin, radial_margin)
+    return thumb_extended and (not fs["index"]) and (not fs["middle"]) and (not fs["ring"]) and (not fs["pinky"])
+
+
 def is_open_palm(hand_lms, margin: float, radial_margin: float) -> bool:
     fs = get_finger_states(hand_lms, margin, radial_margin)
     return fs["index"] and fs["middle"] and fs["ring"] and fs["pinky"]
@@ -335,6 +341,13 @@ def run_camera_loop(
 
             output, using, raw_angle = compute_controls(left, right, cfg, state)
             controller.update(output.steer, output.accel, output.brake)
+
+            if raw_angle is not None and left and right:
+                margin = cfg["finger_extended_margin"]
+                radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
+                if is_thumb_up(left, margin, radial_margin) and is_thumb_up(right, margin, radial_margin):
+                    state.set_neutral(raw_angle)
+                    state.last_calib_time = time.time()
 
             if show_ui:
                 cv2.putText(

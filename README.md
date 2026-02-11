@@ -56,6 +56,7 @@ Common flags:
 Controls while running:
 
 - `c` calibrates neutral steering (center)
+- two thumbs up (both hands) auto-calibrates neutral steering
 - `q` quits
 
 ## Docker (CPU and GPU Profiles)
