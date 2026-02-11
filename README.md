@@ -45,7 +45,7 @@ python -m src.app --controller on --camera 0 --show-ui
 
 Common flags:
 
-- `--config config/main.yml`: main runtime config (smoothing, thresholds, UI defaults).
+- `--config config/main.yml`: main runtime config (detection thresholds, UI defaults).
 - `--controls-config config/controls.yml`: controller mapping and backend settings.
 - `--controller on|off`: enable or disable virtual controller output (auto-selects uinput on Linux or vgamepad on Windows).
 - `--show-ui/--no-show-ui`: enable or disable the on-screen preview window.
@@ -55,8 +55,8 @@ Common flags:
 
 Controls while running:
 
-- `c` calibrates neutral steering (center)
-- two thumbs up (both hands) auto-calibrates neutral steering
+- `c` clears calibration and starts the guided calibration flow (controller output disabled while calibrating)
+- two thumbs up (both hands) auto-calibrates neutral steering (only when no calibration file is loaded)
 - `q` quits
 
 ## Docker (CPU and GPU Profiles)
@@ -103,7 +103,7 @@ Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost`
 
 ## Config
 
-The main settings live in `config/main.yml` and control thresholds, smoothing, UI flags, and camera defaults. Control mappings are in `config/controls.yml`.
+The main settings live in `config/main.yml` and control detection thresholds, UI flags, and camera defaults. Control mappings are in `config/controls.yml`. Steering range and preferred hands now come from the calibration file in `calibration/calibration.json`.
 
 ## Notebooks
 
