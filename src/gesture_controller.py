@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import math
 import time
 import urllib.request
@@ -152,12 +151,7 @@ def calibration_root() -> Path:
 
 
 def calibration_path() -> Path:
-    root = calibration_root()
-    for name in ("calibration.yml", "calibration.yaml", "calibration.json"):
-        candidate = root / name
-        if candidate.exists():
-            return candidate
-    return root / "calibration.yml"
+    return calibration_root() / "calibration.yml"
 
 
 def load_calibration(path: Path) -> Optional[CalibrationData]:
@@ -167,11 +161,8 @@ def load_calibration(path: Path) -> Optional[CalibrationData]:
         return None
     with path.open("r", encoding="utf-8") as handle:
         try:
-            if path.suffix in {".yml", ".yaml"}:
-                data = yaml.safe_load(handle)
-            else:
-                data = json.load(handle)
-        except (json.JSONDecodeError, yaml.YAMLError, TypeError, ValueError):
+            data = yaml.safe_load(handle)
+        except (yaml.YAMLError, TypeError, ValueError):
             return None
     if not isinstance(data, dict):
         return None
@@ -200,10 +191,7 @@ def load_calibration(path: Path) -> Optional[CalibrationData]:
 def save_calibration(path: Path, calibration: CalibrationData) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
-        if path.suffix in {".yml", ".yaml"}:
-            yaml.safe_dump(calibration.to_dict(), handle, sort_keys=False)
-        else:
-            json.dump(calibration.to_dict(), handle, indent=2)
+        yaml.safe_dump(calibration.to_dict(), handle, sort_keys=False)
 
 
 def _single_hand(left, right) -> Tuple[Optional[object], Optional[str]]:
