@@ -15,8 +15,13 @@ services:
       - SDL_VIDEODRIVER=x11
       - QT_X11_NO_MITSHM=1
       - CONTROLLER=${CONTROLLER:-off}
+      - MPLCONFIGDIR=/tmp/matplotlib
+    user: "${UID:-1000}:${GID:-1000}"
+    group_add:
+      - video
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./calibration:/app/calibration
 
   airdrive-gpu:
     <<: *airdrive_common

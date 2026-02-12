@@ -11,6 +11,7 @@ from typing import Optional, Tuple
 
 import cv2
 import mediapipe as mp
+import yaml
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
@@ -151,7 +152,12 @@ def calibration_root() -> Path:
 
 
 def calibration_path() -> Path:
-    return calibration_root() / "calibration.json"
+    root = calibration_root()
+    for name in ("calibration.yml", "calibration.yaml", "calibration.json"):
+        candidate = root / name
+        if candidate.exists():
+            return candidate
+    return root / "calibration.yml"
 
 
 def load_calibration(path: Path) -> Optional[CalibrationData]:
@@ -161,9 +167,14 @@ def load_calibration(path: Path) -> Optional[CalibrationData]:
         return None
     with path.open("r", encoding="utf-8") as handle:
         try:
-            data = json.load(handle)
-        except json.JSONDecodeError:
+            if path.suffix in {".yml", ".yaml"}:
+                data = yaml.safe_load(handle)
+            else:
+                data = json.load(handle)
+        except (json.JSONDecodeError, yaml.YAMLError, TypeError, ValueError):
             return None
+    if not isinstance(data, dict):
+        return None
 
     try:
         return CalibrationData(
@@ -189,7 +200,10 @@ def load_calibration(path: Path) -> Optional[CalibrationData]:
 def save_calibration(path: Path, calibration: CalibrationData) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
-        json.dump(calibration.to_dict(), handle, indent=2)
+        if path.suffix in {".yml", ".yaml"}:
+            yaml.safe_dump(calibration.to_dict(), handle, sort_keys=False)
+        else:
+            json.dump(calibration.to_dict(), handle, indent=2)
 
 
 def _single_hand(left, right) -> Tuple[Optional[object], Optional[str]]:
@@ -226,10 +240,10 @@ class CalibrationSession:
             {"key": "one_hand_left", "prompt": "One hand: steer LEFT", "kind": "one_hand"},
             {"key": "two_hand_right", "prompt": "Two hands: steer RIGHT", "kind": "two_hand"},
             {"key": "one_hand_right", "prompt": "One hand: steer RIGHT", "kind": "one_hand"},
-            {"key": "brake_left", "prompt": "Left hand: BRAKE (open palm)", "kind": "gesture_brake", "hand": "Left"},
-            {"key": "brake_right", "prompt": "Right hand: BRAKE (open palm)", "kind": "gesture_brake", "hand": "Right"},
-            {"key": "accel_left", "prompt": "Left hand: ACCEL (point index)", "kind": "gesture_accel", "hand": "Left"},
-            {"key": "accel_right", "prompt": "Right hand: ACCEL (point index)", "kind": "gesture_accel", "hand": "Right"},
+            {"key": "brake_left", "prompt": "Left hand: BRAKE (ex. closed fist)", "kind": "gesture_brake", "hand": "Left"},
+            {"key": "brake_right", "prompt": "Right hand: BRAKE (ex. closed fist)", "kind": "gesture_brake", "hand": "Right"},
+            {"key": "accel_left", "prompt": "Left hand: ACCEL (ex. point index)", "kind": "gesture_accel", "hand": "Left"},
+            {"key": "accel_right", "prompt": "Right hand: ACCEL (ex. point index)", "kind": "gesture_accel", "hand": "Right"},
         ]
         if not self.waiting_for_start:
             self.start()
@@ -290,6 +304,8 @@ class CalibrationSession:
 
         margin = cfg["finger_extended_margin"]
         radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
+        action_margin = get_cfg(cfg, "action_finger_extended_margin", margin)
+        action_radial_margin = get_cfg(cfg, "action_finger_extended_radial_margin", radial_margin)
 
         if self.step_index >= len(self.stages):
             self.completed = True
@@ -306,6 +322,8 @@ class CalibrationSession:
                     self.data[f"{stage['key']}_deg"] = sum(self.samples) / len(self.samples)
                     self.reset_samples(now)
                     self.step_index += 1
+                    if self.step_index >= len(self.stages):
+                        self.completed = True
             return self._step_prompt(), None
 
         if kind == "one_hand":
@@ -317,6 +335,8 @@ class CalibrationSession:
                     self.data[f"{stage['key']}_deg"] = sum(self.samples) / len(self.samples)
                     self.reset_samples(now)
                     self.step_index += 1
+                    if self.step_index >= len(self.stages):
+                        self.completed = True
             return self._step_prompt(), None
 
         required_hand = stage.get("hand")
@@ -333,7 +353,10 @@ class CalibrationSession:
             return self._step_prompt(), None
 
         self._maybe_start_stage(now)
-        pattern = hand_finger_pattern(hand, margin, radial_margin)
+        if kind.startswith("gesture_"):
+            pattern = hand_finger_pattern(hand, action_margin, action_radial_margin)
+        else:
+            pattern = hand_finger_pattern(hand, margin, radial_margin)
         self.pattern_samples.append(
             (pattern["thumb"], pattern["index"], pattern["middle"], pattern["ring"], pattern["pinky"])
         )
@@ -362,6 +385,8 @@ class CalibrationSession:
                         self.accel_right = chosen_pattern
             self.reset_samples(now)
             self.step_index += 1
+            if self.step_index >= len(self.stages):
+                self.completed = True
         return self._step_prompt(), None
 
     def build_calibration(self) -> CalibrationData:
@@ -500,18 +525,6 @@ def is_pointing_index(hand_lms, margin: float, radial_margin: float) -> bool:
     return fs["index"] and (not fs["middle"]) and (not fs["ring"]) and (not fs["pinky"])
 
 
-def hand_finger_pattern(hand_lms, margin: float, radial_margin: float) -> dict:
-    fs = get_finger_states(hand_lms, margin, radial_margin)
-    thumb = is_finger_extended(hand_lms, 4, 3, margin, radial_margin)
-    return {
-        "thumb": thumb,
-        "index": fs["index"],
-        "middle": fs["middle"],
-        "ring": fs["ring"],
-        "pinky": fs["pinky"],
-    }
-
-
 def pattern_matches(current: dict, target: Optional[dict], max_mismatches: int = 1) -> bool:
     if target is None:
         return False
@@ -588,31 +601,38 @@ def compute_controls(
 
     margin = cfg["finger_extended_margin"]
     radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
+    action_margin = get_cfg(cfg, "action_finger_extended_margin", margin)
+    action_radial_margin = get_cfg(cfg, "action_finger_extended_radial_margin", radial_margin)
     brake = False
     accel = False
     if calibration:
         if calibration.brake_left and left:
             brake = brake or pattern_matches(
-                hand_finger_pattern(left, margin, radial_margin),
+                hand_finger_pattern(left, action_margin, action_radial_margin),
                 calibration.brake_left,
+                max_mismatches=0,
             )
         if calibration.brake_right and right:
             brake = brake or pattern_matches(
-                hand_finger_pattern(right, margin, radial_margin),
+                hand_finger_pattern(right, action_margin, action_radial_margin),
                 calibration.brake_right,
+                max_mismatches=0,
             )
         if calibration.accel_left and left:
             accel = accel or pattern_matches(
-                hand_finger_pattern(left, margin, radial_margin),
+                hand_finger_pattern(left, action_margin, action_radial_margin),
                 calibration.accel_left,
+                max_mismatches=0,
             )
         if calibration.accel_right and right:
             accel = accel or pattern_matches(
-                hand_finger_pattern(right, margin, radial_margin),
+                hand_finger_pattern(right, action_margin, action_radial_margin),
                 calibration.accel_right,
+                max_mismatches=0,
             )
 
     if brake and accel:
+        brake = False
         accel = False
 
     brake = state.smooth_action(brake, state.brake_hist)
@@ -662,7 +682,9 @@ def run_camera_loop(
 ) -> None:
     cfg = load_config(config_path)
     controls_cfg = load_controls_config(controls_config_path)
-    state = ControllerState(1, 1)
+    steer_smooth_n = get_cfg(cfg, "steer_smooth_n", 1)
+    action_smooth_n = get_cfg(cfg, "action_smooth_n", 3)
+    state = ControllerState(steer_smooth_n, action_smooth_n)
 
     camera_index = camera_index if camera_index is not None else get_cfg(cfg, "camera_index", 0)
     show_ui = show_ui if show_ui is not None else get_cfg(cfg, "show_ui", True)
@@ -734,6 +756,11 @@ def run_camera_loop(
                     state.set_neutral(raw_angle, "2-hand")
                     state.last_calib_time = time.time()
 
+            if calibration_session is not None and calibration_session.completed and calibration is None:
+                calibration = calibration_session.build_calibration()
+                save_calibration(calibration_file, calibration)
+                calibration_session = None
+
             if show_ui:
                 if calibration_session is not None and not calibration_session.completed:
                     prompt, countdown = calibration_session.update(left, right, cfg)
@@ -768,7 +795,7 @@ def run_camera_loop(
                             (0, 200, 255),
                             2,
                         )
-                    if calibration_session.completed:
+                    if calibration_session.completed and calibration is None:
                         calibration = calibration_session.build_calibration()
                         save_calibration(calibration_file, calibration)
                         calibration_session = None
@@ -836,8 +863,8 @@ def run_camera_loop(
                     if calibration_session is not None and calibration_session.waiting_for_start:
                         calibration_session.start()
                 if key == ord("c"):
-                    if calibration_file.exists():
-                        calibration_file.unlink()
+                    for existing in calib_dir.glob("calibration.*"):
+                        existing.unlink()
                     calibration = None
                     calibration_session = CalibrationSession(show_ui=show_ui)
                     state.neutral_by_mode = {"2-hand": None, "1-hand": None}
@@ -847,7 +874,7 @@ def run_camera_loop(
             else:
                 if calibration_session is not None and not calibration_session.completed:
                     calibration_session.update(left, right, cfg)
-                    if calibration_session.completed:
+                    if calibration_session.completed and calibration is None:
                         calibration = calibration_session.build_calibration()
                         save_calibration(calibration_file, calibration)
                         calibration_session = None
