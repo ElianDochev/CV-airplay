@@ -59,6 +59,12 @@ Controls while running:
 - two thumbs up (both hands) auto-calibrates neutral steering (only when no calibration file is loaded)
 - `q` quits
 
+Calibration UI:
+
+- Shows a 3-2-1-GO countdown before each capture stage
+- Shows only the current calibration action (steer left/right, brake, accel)
+- Stages: two-hand left, one-hand left, two-hand right, one-hand right, left brake, right brake, left accel, right accel
+
 ## Docker (CPU and GPU Profiles)
 
 CPU (Python 3.12):

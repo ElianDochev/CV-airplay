@@ -17,7 +17,6 @@ services:
       - CONTROLLER=${CONTROLLER:-off}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-    command: ["python", "-m", "src.app", "--show-ui"]
 
   airdrive-gpu:
     <<: *airdrive_common

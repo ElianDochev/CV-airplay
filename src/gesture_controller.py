@@ -43,8 +43,10 @@ class CalibrationData:
     one_hand_right_deg: float
     one_hand_neutral_deg: float
     one_hand_max_steer_deg: float
-    brake_hand: Optional[str]
-    accel_hand: Optional[str]
+    brake_left: Optional[dict]
+    brake_right: Optional[dict]
+    accel_left: Optional[dict]
+    accel_right: Optional[dict]
 
     def to_dict(self) -> dict:
         return {
@@ -58,8 +60,10 @@ class CalibrationData:
             "one_hand_right_deg": self.one_hand_right_deg,
             "one_hand_neutral_deg": self.one_hand_neutral_deg,
             "one_hand_max_steer_deg": self.one_hand_max_steer_deg,
-            "brake_hand": self.brake_hand,
-            "accel_hand": self.accel_hand,
+            "brake_left": self.brake_left,
+            "brake_right": self.brake_right,
+            "accel_left": self.accel_left,
+            "accel_right": self.accel_right,
         }
 
 
@@ -124,6 +128,16 @@ def hand_label(handedness_entry) -> str:
     return getattr(classification, "category_name", getattr(classification, "label", "Unknown"))
 
 
+def resolve_hand_label(label: str, mirror_input: bool) -> str:
+    if not mirror_input:
+        return label
+    if label == "Left":
+        return "Right"
+    if label == "Right":
+        return "Left"
+    return label
+
+
 def render_landmarks(frame, hand_lms, color=(0, 255, 0)) -> None:
     landmarks = hand_lms.landmark if hasattr(hand_lms, "landmark") else hand_lms
     for lm in landmarks:
@@ -143,8 +157,13 @@ def calibration_path() -> Path:
 def load_calibration(path: Path) -> Optional[CalibrationData]:
     if not path.exists():
         return None
+    if path.stat().st_size == 0:
+        return None
     with path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
+        try:
+            data = json.load(handle)
+        except json.JSONDecodeError:
+            return None
 
     try:
         return CalibrationData(
@@ -158,8 +177,10 @@ def load_calibration(path: Path) -> Optional[CalibrationData]:
             one_hand_right_deg=float(data["one_hand_right_deg"]),
             one_hand_neutral_deg=float(data["one_hand_neutral_deg"]),
             one_hand_max_steer_deg=float(data["one_hand_max_steer_deg"]),
-            brake_hand=data.get("brake_hand"),
-            accel_hand=data.get("accel_hand"),
+            brake_left=data.get("brake_left") if isinstance(data.get("brake_left"), dict) else None,
+            brake_right=data.get("brake_right") if isinstance(data.get("brake_right"), dict) else None,
+            accel_left=data.get("accel_left") if isinstance(data.get("accel_left"), dict) else None,
+            accel_right=data.get("accel_right") if isinstance(data.get("accel_right"), dict) else None,
         )
     except (KeyError, TypeError, ValueError):
         return None
@@ -180,102 +201,168 @@ def _single_hand(left, right) -> Tuple[Optional[object], Optional[str]]:
 
 
 class CalibrationSession:
-    def __init__(self, show_ui: bool, countdown_seconds: int = 3, sample_frames: int = 18) -> None:
+    def __init__(self, show_ui: bool, countdown_seconds: int = 3, stage_duration: float = 3.0) -> None:
         self.show_ui = show_ui
         self.countdown_seconds = countdown_seconds
-        self.sample_frames = sample_frames
-        self.start_time = time.time()
-        self.countdown_end = self.start_time + (countdown_seconds if show_ui else 0)
+        self.stage_delay_seconds = 4.0
+        self.stage_duration = stage_duration
+        self.start_time: Optional[float] = None
+        self.countdown_end: Optional[float] = None
+        self.go_end: Optional[float] = None
+        self.waiting_for_start = show_ui
         self.step_index = 0
         self.samples: list[float] = []
         self.data: dict[str, float | str] = {}
-        self.one_hand_label: Optional[str] = None
-        self.brake_hand: Optional[str] = None
-        self.accel_hand: Optional[str] = None
+        self.brake_left: Optional[dict] = None
+        self.brake_right: Optional[dict] = None
+        self.accel_left: Optional[dict] = None
+        self.accel_right: Optional[dict] = None
+        self.stage_start_time: Optional[float] = None
+        self.stage_delay_end: Optional[float] = None
+        self.pattern_samples: list[Tuple[bool, bool, bool, bool, bool]] = []
         self.completed = False
+        self.stages = [
+            {"key": "two_hand_left", "prompt": "Two hands: steer LEFT", "kind": "two_hand"},
+            {"key": "one_hand_left", "prompt": "One hand: steer LEFT", "kind": "one_hand"},
+            {"key": "two_hand_right", "prompt": "Two hands: steer RIGHT", "kind": "two_hand"},
+            {"key": "one_hand_right", "prompt": "One hand: steer RIGHT", "kind": "one_hand"},
+            {"key": "brake_left", "prompt": "Left hand: BRAKE (open palm)", "kind": "gesture_brake", "hand": "Left"},
+            {"key": "brake_right", "prompt": "Right hand: BRAKE (open palm)", "kind": "gesture_brake", "hand": "Right"},
+            {"key": "accel_left", "prompt": "Left hand: ACCEL (point index)", "kind": "gesture_accel", "hand": "Left"},
+            {"key": "accel_right", "prompt": "Right hand: ACCEL (point index)", "kind": "gesture_accel", "hand": "Right"},
+        ]
+        if not self.waiting_for_start:
+            self.start()
 
-    def reset_samples(self) -> None:
+    def start(self) -> None:
+        if self.start_time is not None:
+            return
+        self.waiting_for_start = False
+        self.start_time = time.time()
+        self.countdown_end = self.start_time + self.countdown_seconds
+        self.go_end = self.countdown_end + 0.5
+        self.stage_delay_end = self.start_time
+
+    def reset_samples(self, now: Optional[float] = None) -> None:
         self.samples = []
+        self.pattern_samples = []
+        self.stage_start_time = None
+        now_time = now if now is not None else time.time()
+        self.stage_delay_end = now_time + self.stage_delay_seconds
 
     def _step_prompt(self) -> str:
-        prompts = [
-            "Two hands: steer LEFT",
-            "Two hands: steer RIGHT",
-            "One hand: steer LEFT",
-            "One hand: steer RIGHT",
-            "One hand: BRAKE (open palm)",
-            "One hand: ACCEL (point index)",
-        ]
-        return prompts[self.step_index] if self.step_index < len(prompts) else "Calibration complete"
+        if self.step_index >= len(self.stages):
+            return "Calibration complete"
+        return self.stages[self.step_index]["prompt"]
 
-    def update(self, left, right, cfg: dict) -> str:
+    def _maybe_start_stage(self, now: float) -> None:
+        if self.stage_start_time is None:
+            self.stage_start_time = now
+
+    def _stage_elapsed(self, now: float) -> bool:
+        return self.stage_start_time is not None and (now - self.stage_start_time) >= self.stage_duration
+
+    def _delay_countdown_text(self, now: float) -> Optional[str]:
+        if self.stage_delay_end is None:
+            return None
+        remaining = self.stage_delay_end - now
+        if remaining <= 0:
+            return None
+        if remaining <= 1.0:
+            return "GO"
+        display = int(math.ceil(remaining)) - 1
+        display = max(1, min(3, display))
+        return str(display)
+
+    def update(self, left, right, cfg: dict) -> Tuple[str, Optional[str]]:
         now = time.time()
-        if now < self.countdown_end:
-            remaining = int(math.ceil(self.countdown_end - now))
-            return f"Calibration starts in {remaining}..."
+        if self.waiting_for_start:
+            return self._step_prompt(), "Press SPACE"
+        if self.countdown_end is not None and now < self.countdown_end:
+            remaining = max(1, int(self.countdown_end - now) + 1)
+            return self._step_prompt(), str(remaining)
+        if self.go_end is not None and now < self.go_end:
+            return self._step_prompt(), "GO"
+
+        delay_text = self._delay_countdown_text(now)
+        if delay_text is not None:
+            return self._step_prompt(), delay_text
 
         margin = cfg["finger_extended_margin"]
         radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
 
-        if self.step_index == 0:
-            if left and right:
-                self.samples.append(steering_angle_two_hands(left, right))
-                if len(self.samples) >= self.sample_frames:
-                    self.data["two_hand_left_deg"] = sum(self.samples) / len(self.samples)
-                    self.reset_samples()
-                    self.step_index += 1
-            return self._step_prompt()
+        if self.step_index >= len(self.stages):
+            self.completed = True
+            return "Calibration complete", None
 
-        if self.step_index == 1:
-            if left and right:
-                self.samples.append(steering_angle_two_hands(left, right))
-                if len(self.samples) >= self.sample_frames:
-                    self.data["two_hand_right_deg"] = sum(self.samples) / len(self.samples)
-                    self.reset_samples()
-                    self.step_index += 1
-            return self._step_prompt()
+        stage = self.stages[self.step_index]
+        kind = stage["kind"]
 
-        if self.step_index == 2:
-            hand, label = _single_hand(left, right)
+        if kind == "two_hand":
+            if left and right:
+                self._maybe_start_stage(now)
+                self.samples.append(steering_angle_two_hands(left, right))
+                if self._stage_elapsed(now):
+                    self.data[f"{stage['key']}_deg"] = sum(self.samples) / len(self.samples)
+                    self.reset_samples(now)
+                    self.step_index += 1
+            return self._step_prompt(), None
+
+        if kind == "one_hand":
+            hand, _label = _single_hand(left, right)
             if hand is not None:
-                if self.one_hand_label is None:
-                    self.one_hand_label = label
-                if label == self.one_hand_label:
-                    self.samples.append(steering_angle_one_hand(hand))
-                    if len(self.samples) >= self.sample_frames:
-                        self.data["one_hand_left_deg"] = sum(self.samples) / len(self.samples)
-                        self.reset_samples()
-                        self.step_index += 1
-            return self._step_prompt()
-
-        if self.step_index == 3:
-            hand, label = _single_hand(left, right)
-            if hand is not None and label == self.one_hand_label:
+                self._maybe_start_stage(now)
                 self.samples.append(steering_angle_one_hand(hand))
-                if len(self.samples) >= self.sample_frames:
-                    self.data["one_hand_right_deg"] = sum(self.samples) / len(self.samples)
-                    self.reset_samples()
+                if self._stage_elapsed(now):
+                    self.data[f"{stage['key']}_deg"] = sum(self.samples) / len(self.samples)
+                    self.reset_samples(now)
                     self.step_index += 1
-            return self._step_prompt()
+            return self._step_prompt(), None
 
-        if self.step_index == 4:
+        required_hand = stage.get("hand")
+        if required_hand == "Left":
+            hand = left
+            label = "Left" if left is not None else None
+        elif required_hand == "Right":
+            hand = right
+            label = "Right" if right is not None else None
+        else:
             hand, label = _single_hand(left, right)
-            if hand is not None and is_open_palm(hand, margin, radial_margin):
-                self.brake_hand = label
-                self.step_index += 1
-            return self._step_prompt()
 
-        if self.step_index == 5:
-            hand, label = _single_hand(left, right)
-            if hand is not None and is_pointing_index(hand, margin, radial_margin):
-                self.accel_hand = label
-                self.step_index += 1
-                if self.step_index >= 6:
-                    self.completed = True
-            return self._step_prompt()
+        if hand is None or label is None:
+            return self._step_prompt(), None
 
-        self.completed = True
-        return "Calibration complete"
+        self._maybe_start_stage(now)
+        pattern = hand_finger_pattern(hand, margin, radial_margin)
+        self.pattern_samples.append(
+            (pattern["thumb"], pattern["index"], pattern["middle"], pattern["ring"], pattern["pinky"])
+        )
+        if self._stage_elapsed(now):
+            if self.pattern_samples:
+                counts: dict[Tuple[bool, bool, bool, bool, bool], int] = {}
+                for sample in self.pattern_samples:
+                    counts[sample] = counts.get(sample, 0) + 1
+                chosen = max(counts.items(), key=lambda item: item[1])[0]
+                chosen_pattern = {
+                    "thumb": chosen[0],
+                    "index": chosen[1],
+                    "middle": chosen[2],
+                    "ring": chosen[3],
+                    "pinky": chosen[4],
+                }
+                if kind == "gesture_brake":
+                    if label == "Left":
+                        self.brake_left = chosen_pattern
+                    else:
+                        self.brake_right = chosen_pattern
+                else:
+                    if label == "Left":
+                        self.accel_left = chosen_pattern
+                    else:
+                        self.accel_right = chosen_pattern
+            self.reset_samples(now)
+            self.step_index += 1
+        return self._step_prompt(), None
 
     def build_calibration(self) -> CalibrationData:
         two_left = float(self.data["two_hand_left_deg"])
@@ -297,8 +384,10 @@ class CalibrationSession:
             one_hand_right_deg=one_right,
             one_hand_neutral_deg=one_neutral,
             one_hand_max_steer_deg=one_max,
-            brake_hand=self.brake_hand,
-            accel_hand=self.accel_hand,
+            brake_left=self.brake_left,
+            brake_right=self.brake_right,
+            accel_left=self.accel_left,
+            accel_right=self.accel_right,
         )
 
 
@@ -411,6 +500,42 @@ def is_pointing_index(hand_lms, margin: float, radial_margin: float) -> bool:
     return fs["index"] and (not fs["middle"]) and (not fs["ring"]) and (not fs["pinky"])
 
 
+def hand_finger_pattern(hand_lms, margin: float, radial_margin: float) -> dict:
+    fs = get_finger_states(hand_lms, margin, radial_margin)
+    thumb = is_finger_extended(hand_lms, 4, 3, margin, radial_margin)
+    return {
+        "thumb": thumb,
+        "index": fs["index"],
+        "middle": fs["middle"],
+        "ring": fs["ring"],
+        "pinky": fs["pinky"],
+    }
+
+
+def pattern_matches(current: dict, target: Optional[dict], max_mismatches: int = 1) -> bool:
+    if target is None:
+        return False
+    mismatches = 0
+    for key in ("thumb", "index", "middle", "ring", "pinky"):
+        if current.get(key) != target.get(key):
+            mismatches += 1
+            if mismatches > max_mismatches:
+                return False
+    return True
+
+
+def hand_finger_pattern(hand_lms, margin: float, radial_margin: float) -> dict:
+    fs = get_finger_states(hand_lms, margin, radial_margin)
+    thumb = is_finger_extended(hand_lms, 4, 3, margin, radial_margin)
+    return {
+        "thumb": thumb,
+        "index": fs["index"],
+        "middle": fs["middle"],
+        "ring": fs["ring"],
+        "pinky": fs["pinky"],
+    }
+
+
 # -------------------------
 # Steering angles
 # -------------------------
@@ -427,22 +552,6 @@ def steering_angle_one_hand(hand_lms) -> float:
     pinky_mcp = lm_xy(hand_lms, 17)
     mid = ((index_mcp[0] + pinky_mcp[0]) / 2.0, (index_mcp[1] + pinky_mcp[1]) / 2.0)
     return rad2deg(angle_2d(wrist, mid))
-
-
-def _select_hand(left, right, preferred: str):
-    if preferred.lower() == "left":
-        return left if left is not None else right
-    return right if right is not None else left
-
-
-def detect_brake(left, right, margin: float, radial_margin: float, preferred: str) -> bool:
-    hand = _select_hand(left, right, preferred)
-    return bool(hand and is_open_palm(hand, margin, radial_margin))
-
-
-def detect_accel(left, right, margin: float, radial_margin: float, preferred: str) -> bool:
-    hand = _select_hand(left, right, preferred)
-    return bool(hand and is_pointing_index(hand, margin, radial_margin))
 
 
 def _calibration_mode(using: str) -> str:
@@ -479,14 +588,29 @@ def compute_controls(
 
     margin = cfg["finger_extended_margin"]
     radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
-    brake_preferred = calibration.brake_hand if calibration else None
-    accel_preferred = calibration.accel_hand if calibration else None
     brake = False
     accel = False
-    if brake_preferred:
-        brake = detect_brake(left, right, margin, radial_margin, brake_preferred)
-    if accel_preferred:
-        accel = detect_accel(left, right, margin, radial_margin, accel_preferred)
+    if calibration:
+        if calibration.brake_left and left:
+            brake = brake or pattern_matches(
+                hand_finger_pattern(left, margin, radial_margin),
+                calibration.brake_left,
+            )
+        if calibration.brake_right and right:
+            brake = brake or pattern_matches(
+                hand_finger_pattern(right, margin, radial_margin),
+                calibration.brake_right,
+            )
+        if calibration.accel_left and left:
+            accel = accel or pattern_matches(
+                hand_finger_pattern(left, margin, radial_margin),
+                calibration.accel_left,
+            )
+        if calibration.accel_right and right:
+            accel = accel or pattern_matches(
+                hand_finger_pattern(right, margin, radial_margin),
+                calibration.accel_right,
+            )
 
     if brake and accel:
         accel = False
@@ -549,8 +673,12 @@ def run_camera_loop(
     backend_name = backend if backend is not None else get_cfg(cfg, "controller_backend", None)
     controller = create_control_backend(controls_cfg, backend_name)
 
+    calib_dir = calibration_root()
+    calib_dir.mkdir(parents=True, exist_ok=True)
     calibration_file = calibration_path()
-    calibration = load_calibration(calibration_file)
+    calibration = None
+    if any(calib_dir.iterdir()):
+        calibration = load_calibration(calibration_file)
     calibration_session: Optional[CalibrationSession] = None
     if calibration is None:
         calibration_session = CalibrationSession(show_ui=show_ui)
@@ -584,7 +712,7 @@ def run_camera_loop(
 
             if res.hand_landmarks and res.handedness:
                 for hand_lms, handed in zip(res.hand_landmarks, res.handedness):
-                    label = hand_label(handed)
+                    label = resolve_hand_label(hand_label(handed), mirror_input)
                     if label == "Left":
                         left = hand_lms
                     else:
@@ -607,90 +735,106 @@ def run_camera_loop(
                     state.last_calib_time = time.time()
 
             if show_ui:
-                cv2.putText(
-                    frame,
-                    f"Steer: {output.steer:+.2f}  (src: {using})",
-                    (20, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
-                    (255, 255, 255),
-                    2,
-                )
-                cv2.putText(
-                    frame,
-                    f"Accel: {output.accel}  Brake: {output.brake}",
-                    (20, 65),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
-                    (255, 255, 255),
-                    2,
-                )
-                if calibration is not None:
-                    cv2.putText(
-                        frame,
-                        f"Calib 2H max: {calibration.two_hand_max_steer_deg:.1f}  1H max: {calibration.one_hand_max_steer_deg:.1f}",
-                        (20, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2,
-                    )
-                else:
-                    neutral = state.neutral_by_mode["2-hand"]
-                    cv2.putText(
-                        frame,
-                        f"Neutral deg: {neutral:.1f}" if neutral is not None else "Neutral: None",
-                        (20, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2,
-                    )
-
                 if calibration_session is not None and not calibration_session.completed:
-                    prompt = calibration_session.update(left, right, cfg)
+                    prompt, countdown = calibration_session.update(left, right, cfg)
                     cv2.putText(
                         frame,
-                        "Calibration: controller disabled",
-                        (20, 135),
+                        "Calibration",
+                        (20, 40),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
+                        0.9,
                         (0, 200, 255),
                         2,
                     )
                     cv2.putText(
                         frame,
                         prompt,
-                        (20, 170),
+                        (20, 80),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
+                        0.8,
                         (0, 200, 255),
                         2,
                     )
+                    if countdown:
+                        countdown_text = countdown
+                        if countdown == "Press SPACE":
+                            countdown_text = "Press SPACE to start"
+                        cv2.putText(
+                            frame,
+                            f"Starts in: {countdown_text}",
+                            (20, 120),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8,
+                            (0, 200, 255),
+                            2,
+                        )
                     if calibration_session.completed:
                         calibration = calibration_session.build_calibration()
                         save_calibration(calibration_file, calibration)
                         calibration_session = None
-
-                if show_fps:
-                    curr_time = time.time()
-                    fps = 1 / (curr_time - prev_time) if prev_time else 0
-                    prev_time = curr_time
+                else:
                     cv2.putText(
                         frame,
-                        f"FPS: {int(fps)}",
-                        (20, 205) if (calibration_session is not None and not calibration_session.completed) else (20, 135),
+                        f"Steer: {output.steer:+.2f}  (src: {using})",
+                        (20, 30),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
+                        0.8,
                         (255, 255, 255),
                         2,
                     )
+                    cv2.putText(
+                        frame,
+                        f"Accel: {output.accel}  Brake: {output.brake}",
+                        (20, 65),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.8,
+                        (255, 255, 255),
+                        2,
+                    )
+                    if calibration is not None:
+                        cv2.putText(
+                            frame,
+                            f"Calib 2H max: {calibration.two_hand_max_steer_deg:.1f}  1H max: {calibration.one_hand_max_steer_deg:.1f}",
+                            (20, 100),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (255, 255, 255),
+                            2,
+                        )
+                    else:
+                        neutral = state.neutral_by_mode["2-hand"]
+                        cv2.putText(
+                            frame,
+                            f"Neutral deg: {neutral:.1f}" if neutral is not None else "Neutral: None",
+                            (20, 100),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (255, 255, 255),
+                            2,
+                        )
+
+                    if show_fps:
+                        curr_time = time.time()
+                        fps = 1 / (curr_time - prev_time) if prev_time else 0
+                        prev_time = curr_time
+                        cv2.putText(
+                            frame,
+                            f"FPS: {int(fps)}",
+                            (20, 135),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (255, 255, 255),
+                            2,
+                        )
 
                 cv2.imshow(window_name, frame)
 
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):
                     break
+                if key == ord(" "):
+                    if calibration_session is not None and calibration_session.waiting_for_start:
+                        calibration_session.start()
                 if key == ord("c"):
                     if calibration_file.exists():
                         calibration_file.unlink()
