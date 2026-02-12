@@ -1,0 +1,34 @@
+version: 1
+created_at: '2026-02-12T13:54:34Z'
+two_hand_left_deg: -30.6014360612867
+two_hand_right_deg: 36.662225510041125
+two_hand_neutral_deg: 3.030394724377203
+two_hand_max_steer_deg: 33.63183078566391
+one_hand_left_deg: -163.74996674623574
+one_hand_right_deg: -11.607528702752239
+one_hand_neutral_deg: -87.67874772449397
+one_hand_max_steer_deg: 76.07121902174177
+brake_left:
+  thumb: false
+  index: false
+  middle: false
+  ring: false
+  pinky: false
+brake_right:
+  thumb: false
+  index: false
+  middle: false
+  ring: false
+  pinky: false
+accel_left:
+  thumb: true
+  index: true
+  middle: true
+  ring: true
+  pinky: true
+accel_right:
+  thumb: true
+  index: true
+  middle: false
+  ring: false
+  pinky: false

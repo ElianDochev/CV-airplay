@@ -109,7 +109,9 @@ Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost`
 
 ## Config
 
-The main settings live in `config/main.yml` and control detection thresholds, UI flags, and camera defaults. Control mappings are in `config/controls.yml`. Steering range and preferred hands now come from the calibration file in `calibration/calibration.json`.
+The main settings live in `config/main.yml` and control detection thresholds, UI flags, and camera defaults. Control mappings are in `config/controls.yml`. Steering range and preferred hands now come from the calibration file in `calibration/calibration.yml`.
+
+If you do not want to run the calibration flow yourself, copy `example-calibration/calibration.yml` into the `calibration/` directory. The defaults in that file assume: palm in neutral position for left/right steering (one hand or two hands), closed fist for brake (left or right hand), and pointing with index for accelaration (left or right hand).
 
 ## Notebooks
 
