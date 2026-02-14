@@ -47,7 +47,7 @@ Common flags:
 
 - `--config config/main.yml`: main runtime config (detection thresholds, UI defaults).
 - `--controls-config config/controls.yml`: controller mapping and backend settings.
-- `--controller on|off`: enable or disable virtual controller output (auto-selects uinput on Linux or vgamepad on Windows).
+- `--controller on|off`: start controller active after calibration (use SPACE to toggle).
 - `--show-ui/--no-show-ui`: enable or disable the on-screen preview window.
 - `--draw-landmarks/--no-draw-landmarks`: render MediaPipe hand landmarks on the preview.
 - `--mirror-input/--no-mirror-input`: mirror the webcam feed for natural left/right control.
@@ -56,6 +56,7 @@ Common flags:
 Controls while running:
 
 - `c` clears calibration and starts the guided calibration flow (controller output disabled while calibrating)
+- `space` toggles controller output (3 second countdown when enabling)
 - two thumbs up (both hands) auto-calibrates neutral steering (only when no calibration file is loaded)
 - `q` quits
 
@@ -101,8 +102,8 @@ Notes:
   xhost +local:
   ```
 
-- Linux requires `/dev/video0` and `/dev/uinput` access.
-- You may need `sudo modprobe uinput` on the host.
+- Linux requires `/dev/video0` access. Joystick mode also needs `/dev/uinput` access.
+- For joystick mode on Linux, you may need `sudo modprobe uinput` on the host.
 - The container runs headless by default with `--no-show-ui`.
 
 Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost` is not required. If you are running an X server (VcXsrv/Xming), allow local connections in that server's settings.
@@ -110,6 +111,11 @@ Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost`
 ## Config
 
 The main settings live in `config/main.yml` and control detection thresholds, UI flags, and camera defaults. Control mappings are in `config/controls.yml`. Steering range and preferred hands now come from the calibration file in `calibration/calibration.yml`.
+
+To switch between keyboard and joystick output, edit `config/controls.yml`:
+
+- `type: keyboard` for keyboard output
+- `type: gamepad` for joystick output (uses the `gamepad.backend` setting)
 
 If you do not want to run the calibration flow yourself, copy `example-calibration/calibration.yml` into the `calibration/` directory. The defaults in that file assume: palm in neutral position for left/right steering (one hand or two hands), closed fist for brake (left or right hand), and pointing with index for accelaration (left or right hand).
 

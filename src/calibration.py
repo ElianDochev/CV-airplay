@@ -137,8 +137,8 @@ class CalibrationSession:
             {"key": "one_hand_right", "prompt": "One hand: steer RIGHT", "kind": "one_hand"},
             {"key": "brake_left", "prompt": "Left hand: BRAKE (ex. closed fist)", "kind": "gesture_brake", "hand": "Left"},
             {"key": "brake_right", "prompt": "Right hand: BRAKE (ex. closed fist)", "kind": "gesture_brake", "hand": "Right"},
-            {"key": "accel_left", "prompt": "Left hand: ACCEL (ex. point index)", "kind": "gesture_accel", "hand": "Left"},
-            {"key": "accel_right", "prompt": "Right hand: ACCEL (ex. point index)", "kind": "gesture_accel", "hand": "Right"},
+            {"key": "accel_left", "prompt": "Left hand: ACCEL (ex. open palm )", "kind": "gesture_accel", "hand": "Left"},
+            {"key": "accel_right", "prompt": "Right hand: ACCEL (ex. open palm)", "kind": "gesture_accel", "hand": "Right"},
         ]
         if not self.waiting_for_start:
             self.start()

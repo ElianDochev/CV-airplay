@@ -19,7 +19,6 @@ class ControllerState:
         self.accel_hist = deque(maxlen=action_smooth_n)
         self.brake_hist = deque(maxlen=action_smooth_n)
         self.last = ControlOutput(steer=0.0, accel=False, brake=False)
-        self.last_calib_time = 0.0
 
     def set_neutral(self, angle_deg: float, mode: str) -> None:
         self.neutral_by_mode[mode] = angle_deg

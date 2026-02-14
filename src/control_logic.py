@@ -79,10 +79,6 @@ def compute_controls(
                 max_mismatches=0,
             )
 
-    if brake and accel:
-        brake = False
-        accel = False
-
     brake = state.smooth_action(brake, state.brake_hist)
     accel = state.smooth_action(accel, state.accel_hist)
 

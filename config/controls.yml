@@ -1,11 +1,13 @@
-type: gamepad
+type: keyboard  # change to "gamepad" for joystick output
 
 gamepad:
   backend: uinput
 
 keyboard:
-  left_key: left
-  right_key: right
+  backend: auto  # auto|uinput|pynput
+  left_key: a
+  right_key: d
   accel_key: w
   brake_key: space
   steer_threshold: 0.2
+  steer_hold_threshold: 0.5

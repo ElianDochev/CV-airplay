@@ -95,16 +95,6 @@ def is_thumb_up(hand_lms, margin: float, radial_margin: float) -> bool:
     return thumb_extended and (not fs["index"]) and (not fs["middle"]) and (not fs["ring"]) and (not fs["pinky"])
 
 
-def is_open_palm(hand_lms, margin: float, radial_margin: float) -> bool:
-    fs = get_finger_states(hand_lms, margin, radial_margin)
-    return fs["index"] and fs["middle"] and fs["ring"] and fs["pinky"]
-
-
-def is_pointing_index(hand_lms, margin: float, radial_margin: float) -> bool:
-    fs = get_finger_states(hand_lms, margin, radial_margin)
-    return fs["index"] and (not fs["middle"]) and (not fs["ring"]) and (not fs["pinky"])
-
-
 def pattern_matches(current: dict, target: Optional[dict], max_mismatches: int = 1) -> bool:
     if target is None:
         return False

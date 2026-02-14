@@ -26,6 +26,7 @@ def run_camera_loop(
     mirror_input: bool | None = None,
     backend: str | None = None,
     show_fps: bool | None = None,
+    controller_start_active: bool | None = None,
 ) -> None:
     cfg = load_config(config_path)
     controls_cfg = load_controls_config(controls_config_path)
@@ -41,8 +42,16 @@ def run_camera_loop(
     window_name = get_cfg(cfg, "window_name", "MediaPipe Gesture Controller")
     backend_name = backend if backend is not None else get_cfg(cfg, "controller_backend", None)
     controller = create_control_backend(controls_cfg, backend_name)
-    controller_enabled = backend_name is not None and backend_name != "none"
-    controller_active = not controller_enabled
+    control_type = controls_cfg.get("type", "none")
+    if backend_name == "none":
+        controller_enabled = False
+    elif backend_name is not None:
+        controller_enabled = True
+    else:
+        controller_enabled = control_type != "none"
+    controller_start_active = bool(controller_start_active)
+    controller_active = False
+    pending_start = controller_enabled and controller_start_active
     enable_countdown_end: Optional[float] = None
     enable_countdown_seconds = float(get_cfg(cfg, "controller_enable_countdown_seconds", 3))
 
@@ -72,9 +81,6 @@ def run_camera_loop(
             ok, frame = cap.read()
             if not ok:
                 break
-
-            if controller_enabled and not controller_active and not show_ui and enable_countdown_end is None:
-                enable_countdown_end = time.time() + enable_countdown_seconds
 
             if mirror_input:
                 frame = cv2.flip(frame, 1)
@@ -109,12 +115,10 @@ def run_camera_loop(
                 radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
                 if is_thumb_up(left, margin, radial_margin) and is_thumb_up(right, margin, radial_margin):
                     state.set_neutral(raw_angle, "2-hand")
-                    state.last_calib_time = time.time()
 
-            if calibration_session is not None and calibration_session.completed and calibration is None:
-                calibration = calibration_session.build_calibration()
-                save_calibration(calibration_file, calibration)
-                calibration_session = None
+            if pending_start and (calibration_session is None or calibration_session.completed):
+                controller_active = True
+                pending_start = False
 
             if show_ui:
                 if calibration_session is not None and not calibration_session.completed:
@@ -195,14 +199,17 @@ def run_camera_loop(
                             2,
                         )
 
-                    if controller_enabled and not controller_active:
-                        countdown_text = "Press SPACE to enable"
-                        if enable_countdown_end is not None:
-                            remaining = max(0, int(math.ceil(enable_countdown_end - time.time())))
-                            countdown_text = f"Enabling in: {remaining}"
+                    if controller_enabled:
+                        if controller_active:
+                            controller_text = "ENABLED"
+                        else:
+                            controller_text = "DISABLED (Press SPACE to enable)"
+                            if enable_countdown_end is not None:
+                                remaining = max(0, int(math.ceil(enable_countdown_end - time.time())))
+                                controller_text = f"DISABLED (Enabling in: {remaining})"
                         cv2.putText(
                             frame,
-                            f"Controller: DISABLED ({countdown_text})",
+                            f"Controller: {controller_text}",
                             (20, 170),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
@@ -232,8 +239,14 @@ def run_camera_loop(
                 if key == ord(" "):
                     if calibration_session is not None and calibration_session.waiting_for_start:
                         calibration_session.start()
-                    elif controller_enabled and not controller_active and enable_countdown_end is None:
-                        enable_countdown_end = time.time() + enable_countdown_seconds
+                    elif controller_enabled and (calibration_session is None or calibration_session.completed):
+                        if controller_active:
+                            controller_active = False
+                            enable_countdown_end = None
+                        elif enable_countdown_end is None:
+                            enable_countdown_end = time.time() + enable_countdown_seconds
+                        else:
+                            enable_countdown_end = None
                 if key == ord("c"):
                     for existing in calib_dir.glob("calibration.*"):
                         existing.unlink()
