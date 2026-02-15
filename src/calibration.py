@@ -10,10 +10,9 @@ import yaml
 
 from .config_utils import get_cfg
 from .hand_utils import (
-    compute_neutral_and_max,
     hand_finger_pattern,
+    pattern_matches,
     steering_angle_one_hand,
-    steering_angle_two_hands,
 )
 
 
@@ -21,14 +20,8 @@ from .hand_utils import (
 class CalibrationData:
     version: int
     created_at: str
-    two_hand_left_deg: float
-    two_hand_right_deg: float
-    two_hand_neutral_deg: float
-    two_hand_max_steer_deg: float
-    one_hand_left_deg: float
-    one_hand_right_deg: float
-    one_hand_neutral_deg: float
-    one_hand_max_steer_deg: float
+    steer_right_left_deg: float
+    steer_left_right_deg: float
     brake_left: Optional[dict]
     brake_right: Optional[dict]
     accel_left: Optional[dict]
@@ -38,14 +31,8 @@ class CalibrationData:
         return {
             "version": self.version,
             "created_at": self.created_at,
-            "two_hand_left_deg": self.two_hand_left_deg,
-            "two_hand_right_deg": self.two_hand_right_deg,
-            "two_hand_neutral_deg": self.two_hand_neutral_deg,
-            "two_hand_max_steer_deg": self.two_hand_max_steer_deg,
-            "one_hand_left_deg": self.one_hand_left_deg,
-            "one_hand_right_deg": self.one_hand_right_deg,
-            "one_hand_neutral_deg": self.one_hand_neutral_deg,
-            "one_hand_max_steer_deg": self.one_hand_max_steer_deg,
+            "steer_right_left_deg": self.steer_right_left_deg,
+            "steer_left_right_deg": self.steer_left_right_deg,
             "brake_left": self.brake_left,
             "brake_right": self.brake_right,
             "accel_left": self.accel_left,
@@ -78,14 +65,8 @@ def load_calibration(path: Path) -> Optional[CalibrationData]:
         return CalibrationData(
             version=int(data.get("version", 1)),
             created_at=str(data.get("created_at", "")),
-            two_hand_left_deg=float(data["two_hand_left_deg"]),
-            two_hand_right_deg=float(data["two_hand_right_deg"]),
-            two_hand_neutral_deg=float(data["two_hand_neutral_deg"]),
-            two_hand_max_steer_deg=float(data["two_hand_max_steer_deg"]),
-            one_hand_left_deg=float(data["one_hand_left_deg"]),
-            one_hand_right_deg=float(data["one_hand_right_deg"]),
-            one_hand_neutral_deg=float(data["one_hand_neutral_deg"]),
-            one_hand_max_steer_deg=float(data["one_hand_max_steer_deg"]),
+            steer_right_left_deg=float(data["steer_right_left_deg"]),
+            steer_left_right_deg=float(data["steer_left_right_deg"]),
             brake_left=data.get("brake_left") if isinstance(data.get("brake_left"), dict) else None,
             brake_right=data.get("brake_right") if isinstance(data.get("brake_right"), dict) else None,
             accel_left=data.get("accel_left") if isinstance(data.get("accel_left"), dict) else None,
@@ -99,14 +80,6 @@ def save_calibration(path: Path, calibration: CalibrationData) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         yaml.safe_dump(calibration.to_dict(), handle, sort_keys=False)
-
-
-def _single_hand(left, right) -> Tuple[Optional[object], Optional[str]]:
-    if left is not None and right is None:
-        return left, "Left"
-    if right is not None and left is None:
-        return right, "Right"
-    return None, None
 
 
 class CalibrationSession:
@@ -131,14 +104,12 @@ class CalibrationSession:
         self.pattern_samples: list[Tuple[bool, bool, bool, bool, bool]] = []
         self.completed = False
         self.stages = [
-            {"key": "two_hand_left", "prompt": "Two hands: steer LEFT", "kind": "two_hand"},
-            {"key": "one_hand_left", "prompt": "One hand: steer LEFT", "kind": "one_hand"},
-            {"key": "two_hand_right", "prompt": "Two hands: steer RIGHT", "kind": "two_hand"},
-            {"key": "one_hand_right", "prompt": "One hand: steer RIGHT", "kind": "one_hand"},
             {"key": "brake_left", "prompt": "Left hand: BRAKE (ex. closed fist)", "kind": "gesture_brake", "hand": "Left"},
             {"key": "brake_right", "prompt": "Right hand: BRAKE (ex. closed fist)", "kind": "gesture_brake", "hand": "Right"},
-            {"key": "accel_left", "prompt": "Left hand: ACCEL (ex. open palm )", "kind": "gesture_accel", "hand": "Left"},
+            {"key": "accel_left", "prompt": "Left hand: ACCEL (ex. open palm)", "kind": "gesture_accel", "hand": "Left"},
             {"key": "accel_right", "prompt": "Right hand: ACCEL (ex. open palm)", "kind": "gesture_accel", "hand": "Right"},
+            {"key": "steer_right_left", "prompt": "Left hand: STEER RIGHT (cup to right)", "kind": "steer", "hand": "Left"},
+            {"key": "steer_left_right", "prompt": "Right hand: STEER LEFT (cup to left)", "kind": "steer", "hand": "Right"},
         ]
         if not self.waiting_for_start:
             self.start()
@@ -209,30 +180,47 @@ class CalibrationSession:
         stage = self.stages[self.step_index]
         kind = stage["kind"]
 
-        if kind == "two_hand":
-            if left and right:
-                self._maybe_start_stage(now)
-                self.samples.append(steering_angle_two_hands(left, right))
-                if self._stage_elapsed(now):
-                    self.data[f"{stage['key']}_deg"] = sum(self.samples) / len(self.samples)
-                    self.reset_samples(now)
-                    self.step_index += 1
-                    if self.step_index >= len(self.stages):
-                        self.completed = True
-            return self._step_prompt(), None
+        if kind == "steer":
+            required_hand = stage.get("hand")
+            if required_hand == "Left":
+                hand = left
+                label = "Left" if left is not None else None
+            elif required_hand == "Right":
+                hand = right
+                label = "Right" if right is not None else None
+            else:
+                hand = None
+                label = None
 
-        if kind == "one_hand":
-            hand, _label = _single_hand(left, right)
-            if hand is not None:
-                self._maybe_start_stage(now)
+            if hand is None or label is None:
+                return self._step_prompt(), None
+
+            warning = None
+            action_pattern = hand_finger_pattern(hand, action_margin, action_radial_margin)
+            if label == "Left":
+                if self.brake_left and pattern_matches(action_pattern, self.brake_left, max_mismatches=0):
+                    warning = "WARNING: BRAKE detected"
+                if self.accel_left and pattern_matches(action_pattern, self.accel_left, max_mismatches=0):
+                    warning = "WARNING: ACCEL detected"
+            else:
+                if self.brake_right and pattern_matches(action_pattern, self.brake_right, max_mismatches=0):
+                    warning = "WARNING: BRAKE detected"
+                if self.accel_right and pattern_matches(action_pattern, self.accel_right, max_mismatches=0):
+                    warning = "WARNING: ACCEL detected"
+
+            self._maybe_start_stage(now)
+            if warning is None:
                 self.samples.append(steering_angle_one_hand(hand))
-                if self._stage_elapsed(now):
+            if self._stage_elapsed(now):
+                if self.samples:
                     self.data[f"{stage['key']}_deg"] = sum(self.samples) / len(self.samples)
                     self.reset_samples(now)
                     self.step_index += 1
                     if self.step_index >= len(self.stages):
                         self.completed = True
-            return self._step_prompt(), None
+                else:
+                    self.reset_samples(now)
+            return self._step_prompt(), warning
 
         required_hand = stage.get("hand")
         if required_hand == "Left":
@@ -242,7 +230,8 @@ class CalibrationSession:
             hand = right
             label = "Right" if right is not None else None
         else:
-            hand, label = _single_hand(left, right)
+            hand = None
+            label = None
 
         if hand is None or label is None:
             return self._step_prompt(), None
@@ -285,25 +274,14 @@ class CalibrationSession:
         return self._step_prompt(), None
 
     def build_calibration(self) -> CalibrationData:
-        two_left = float(self.data["two_hand_left_deg"])
-        two_right = float(self.data["two_hand_right_deg"])
-        one_left = float(self.data["one_hand_left_deg"])
-        one_right = float(self.data["one_hand_right_deg"])
-
-        two_neutral, two_max = compute_neutral_and_max(two_left, two_right)
-        one_neutral, one_max = compute_neutral_and_max(one_left, one_right)
+        steer_right_left = float(self.data["steer_right_left_deg"])
+        steer_left_right = float(self.data["steer_left_right_deg"])
 
         return CalibrationData(
-            version=1,
+            version=2,
             created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            two_hand_left_deg=two_left,
-            two_hand_right_deg=two_right,
-            two_hand_neutral_deg=two_neutral,
-            two_hand_max_steer_deg=two_max,
-            one_hand_left_deg=one_left,
-            one_hand_right_deg=one_right,
-            one_hand_neutral_deg=one_neutral,
-            one_hand_max_steer_deg=one_max,
+            steer_right_left_deg=steer_right_left,
+            steer_left_right_deg=steer_left_right,
             brake_left=self.brake_left,
             brake_right=self.brake_right,
             accel_left=self.accel_left,

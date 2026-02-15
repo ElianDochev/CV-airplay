@@ -8,6 +8,6 @@ keyboard:
   left_key: a
   right_key: d
   accel_key: w
-  brake_key: space
+  brake_key: s
   steer_threshold: 0.2
   steer_hold_threshold: 0.5
