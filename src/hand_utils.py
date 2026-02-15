@@ -120,9 +120,9 @@ def hand_finger_pattern(hand_lms, margin: float, radial_margin: float) -> dict:
 
 
 def steering_angle_two_hands(left_lms, right_lms) -> float:
-    L = lm_xy(left_lms, 0)
-    R = lm_xy(right_lms, 0)
-    return rad2deg(angle_2d(L, R))
+    left_angle = steering_angle_one_hand(left_lms)
+    right_angle = steering_angle_one_hand(right_lms)
+    return average_angle_deg(left_angle, right_angle)
 
 
 def steering_angle_one_hand(hand_lms) -> float:

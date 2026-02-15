@@ -1,12 +1,12 @@
 # AirDrive — Vision Racing Controller (OpenCV + MediaPipe)
 
-Turn hand gestures into a racing controller (steering + throttle + brake) in real time. The current implementation is a rule-based MediaPipe hand landmark pipeline with optional virtual controller backends.
+Turn two-hand gestures into a racing controller (steering + throttle + brake) in real time. The current implementation is a rule-based MediaPipe hand landmark pipeline with optional virtual controller backends.
 
 ## What It Does
 
 - Tracks up to two hands from a webcam.
-- Detects steering via calibrated cupped-hand gestures (left hand cups right = steer right, right hand cups left = steer left).
-- Uses calibrated gesture rules for throttle and brake.
+- Computes steering angle from one or two hands.
+- Uses thumb-up wrist rotation for steering and index-pointing for braking.
 - Sends output to a virtual controller backend (uinput on Linux, vgamepad on Windows).
 
 ## Project Structure
@@ -57,13 +57,14 @@ Controls while running:
 
 - `c` clears calibration and starts the guided calibration flow (controller output disabled while calibrating)
 - `space` toggles controller output (3 second countdown when enabling)
+- two thumbs up (both hands) auto-calibrates neutral steering (only when no calibration file is loaded)
 - `q` quits
 
 Calibration UI:
 
 - Shows a 3-2-1-GO countdown before each capture stage
-- Shows only the current calibration action (steer left/right, brake, accel)
-- Stages: left brake, right brake, left accel, right accel, left steer right (cup right), right steer left (cup left)
+- Shows only the current calibration action
+- Stages: two-hand neutral (thumbs up), two-hand left, two-hand right, brake in neutral, brake while left, brake while right
 
 ## Docker (CPU and GPU Profiles)
 
@@ -109,14 +110,14 @@ Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost`
 
 ## Config
 
-The main settings live in `config/main.yml` and control detection thresholds, UI flags, and camera defaults. Control mappings are in `config/controls.yml`. Steering gesture angles and action patterns come from the calibration file in `calibration/calibration.yml`.
+The main settings live in `config/main.yml` and control detection thresholds, UI flags, and camera defaults. Control mappings are in `config/controls.yml`. Steering range and preferred hands now come from the calibration file in `calibration/calibration.yml`.
 
 To switch between keyboard and joystick output, edit `config/controls.yml`:
 
 - `type: keyboard` for keyboard output
 - `type: gamepad` for joystick output (uses the `gamepad.backend` setting)
 
-If you do not want to run the calibration flow yourself, copy `example-calibration/calibration.yml` into the `calibration/` directory. The defaults in that file assume: left-hand cupping right to steer right, right-hand cupping left to steer left, closed fist for brake (left or right hand), and open palm for acceleration (left or right hand).
+If you do not want to run the calibration flow yourself, copy `example-calibration/calibration.yml` into the `calibration/` directory. The defaults in that file assume: two thumbs up for neutral, wrist rotation for steering, and index pointing for brake (accel stays on unless braking).
 
 ## Notebooks
 

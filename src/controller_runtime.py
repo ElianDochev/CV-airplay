@@ -13,6 +13,7 @@ from .control.backend import create_control_backend
 from .control_logic import compute_controls
 from .control_types import ControlOutput, ControllerState
 from .hand_detection import build_hand_landmarker, hand_label, render_landmarks, resolve_hand_label
+from .hand_utils import is_thumb_up
 from .ulits import load_config, load_controls_config
 
 
@@ -102,11 +103,18 @@ def run_camera_loop(
                         render_landmarks(frame, hand_lms)
 
             output = ControlOutput(steer=0.0, accel=False, brake=False)
-            using = "neutral"
+            using = "none"
+            raw_angle = None
             if calibration_session is None or calibration_session.completed:
-                output, using = compute_controls(left, right, cfg, state, calibration)
+                output, using, raw_angle = compute_controls(left, right, cfg, state, calibration)
                 if controller_active:
                     controller.update(output.steer, output.accel, output.brake)
+
+            if raw_angle is not None and left and right:
+                margin = cfg["finger_extended_margin"]
+                radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
+                if is_thumb_up(left, margin, radial_margin) and is_thumb_up(right, margin, radial_margin):
+                    state.set_neutral(raw_angle, "2-hand")
 
             if pending_start and (calibration_session is None or calibration_session.completed):
                 controller_active = True
@@ -170,16 +178,27 @@ def run_camera_loop(
                         (255, 255, 255),
                         2,
                     )
-                    calib_text = "Calibration: loaded" if calibration is not None else "Calibration: missing"
-                    cv2.putText(
-                        frame,
-                        calib_text,
-                        (20, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (255, 255, 255),
-                        2,
-                    )
+                    if calibration is not None:
+                        cv2.putText(
+                            frame,
+                            f"Calib 2H max: {calibration.two_hand_max_steer_deg:.1f}",
+                            (20, 100),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (255, 255, 255),
+                            2,
+                        )
+                    else:
+                        neutral = state.neutral_by_mode["2-hand"]
+                        cv2.putText(
+                            frame,
+                            f"Neutral deg: {neutral:.1f}" if neutral is not None else "Neutral: None",
+                            (20, 100),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (255, 255, 255),
+                            2,
+                        )
 
                     if controller_enabled:
                         if controller_active:
@@ -234,6 +253,7 @@ def run_camera_loop(
                         existing.unlink()
                     calibration = None
                     calibration_session = CalibrationSession(show_ui=show_ui)
+                    state.neutral_by_mode = {"2-hand": None}
                     state.steer_hist.clear()
                     state.accel_hist.clear()
                     state.brake_hist.clear()
@@ -244,6 +264,8 @@ def run_camera_loop(
                         calibration = calibration_session.build_calibration()
                         save_calibration(calibration_file, calibration)
                         calibration_session = None
+                elif raw_angle is not None and state.neutral_by_mode["2-hand"] is None:
+                    state.set_neutral(raw_angle, "2-hand")
 
             if enable_countdown_end is not None and time.time() >= enable_countdown_end:
                 controller_active = True

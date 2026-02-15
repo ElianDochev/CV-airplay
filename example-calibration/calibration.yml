@@ -1,28 +1,42 @@
 version: 2
-created_at: '2026-02-15T16:57:12Z'
-steer_right_left_deg: -78.32032809011987
-steer_left_right_deg: -98.79943495032879
-brake_left:
-  thumb: false
-  index: false
+created_at: '2026-02-15T20:03:35Z'
+two_hand_left_deg: -132.31807794881263
+two_hand_right_deg: -83.74821626870613
+two_hand_neutral_deg: -100.58679755252493
+two_hand_max_steer_deg: 31.7312803962877
+brake_neutral_left:
+  thumb: true
+  index: true
   middle: false
   ring: false
   pinky: false
-brake_right:
+brake_neutral_right:
   thumb: true
   index: false
+  middle: true
+  ring: true
+  pinky: true
+brake_left_left:
+  thumb: true
+  index: true
   middle: false
   ring: false
   pinky: false
-accel_left:
+brake_left_right:
   thumb: true
-  index: true
+  index: false
   middle: true
   ring: true
   pinky: true
-accel_right:
+brake_right_left:
   thumb: true
   index: true
-  middle: true
-  ring: true
-  pinky: true
+  middle: false
+  ring: false
+  pinky: false
+brake_right_right:
+  thumb: true
+  index: true
+  middle: false
+  ring: false
+  pinky: false

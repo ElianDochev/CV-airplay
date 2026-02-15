@@ -10,7 +10,8 @@ hand_landmarker_model_url: https://storage.googleapis.com/mediapipe-models/hand_
 # Gesture thresholds (finger extended detection)
 finger_extended_margin: 0.02
 finger_extended_radial_margin: 0.03
-steer_angle_tolerance_deg: 20
+action_finger_extended_margin: 0.035
+action_finger_extended_radial_margin: 0.05
 
 # Runtime defaults
 camera_index: 0

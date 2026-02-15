@@ -30,6 +30,13 @@ This document summarizes the calibration and controller changes attempted to fix
 - Added warnings during neutral step when accel/brake gestures are detected.
 - Prevented completing neutral stage if warning blocks sampling.
 
+## Two-hand thumb-up rework
+- Switched steering to two-hand wrist rotation only (no one-hand steering).
+- Made accel default-on and brake trigger via index-pointing gesture.
+- Replaced calibration stages with neutral, left/right steering, then brake in neutral/left/right.
+- Added separate brake patterns for neutral/left/right to keep steering active while braking.
+- Updated example calibration and README to match the new flow.
+
 ## Duplicates and cleanup
 - Removed unused helper functions and unused state.
 - Reduced duplicate calibration save logic.
