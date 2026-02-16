@@ -285,7 +285,7 @@ class CalibrationSession:
                     self.step_index += 1
                     if self.step_index >= len(self.stages):
                         self.completed = True
-            return self._step_prompt(), None
+        return self._step_prompt(), None
 
     def build_calibration(self) -> CalibrationData:
         two_neutral = float(self.data["two_hand_neutral_deg"])
