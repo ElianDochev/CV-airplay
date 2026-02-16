@@ -1,27 +1,27 @@
 version: 2
-created_at: '2026-02-15T20:03:35Z'
-two_hand_left_deg: -132.31807794881263
-two_hand_right_deg: -83.74821626870613
-two_hand_neutral_deg: -100.58679755252493
-two_hand_max_steer_deg: 31.7312803962877
+created_at: '2026-02-16T17:43:09Z'
+two_hand_left_deg: -137.6179998901583
+two_hand_right_deg: -61.68757634706499
+two_hand_neutral_deg: -96.08172719032606
+two_hand_max_steer_deg: 41.53627269983224
 brake_neutral_left:
   thumb: true
-  index: true
+  index: false
   middle: false
   ring: false
   pinky: false
 brake_neutral_right:
   thumb: true
-  index: false
+  index: true
   middle: true
   ring: true
   pinky: true
 brake_left_left:
   thumb: true
   index: true
-  middle: false
-  ring: false
-  pinky: false
+  middle: true
+  ring: true
+  pinky: true
 brake_left_right:
   thumb: true
   index: false
@@ -30,13 +30,13 @@ brake_left_right:
   pinky: true
 brake_right_left:
   thumb: true
-  index: true
+  index: false
   middle: false
   ring: false
   pinky: false
 brake_right_right:
   thumb: true
   index: true
-  middle: false
-  ring: false
-  pinky: false
+  middle: true
+  ring: true
+  pinky: true

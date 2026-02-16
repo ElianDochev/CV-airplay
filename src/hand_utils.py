@@ -95,6 +95,59 @@ def is_thumb_up(hand_lms, margin: float, radial_margin: float) -> bool:
     return thumb_extended and (not fs["index"]) and (not fs["middle"]) and (not fs["ring"]) and (not fs["pinky"])
 
 
+def thumb_extended(hand_lms, margin: float, radial_margin: float) -> bool:
+    return is_finger_extended(hand_lms, 4, 3, margin, radial_margin)
+
+
+def palm_sideways(hand_lms, max_abs_z: float = 0.4) -> bool:
+    wrist = lm_xyz(hand_lms, 0)
+    index_mcp = lm_xyz(hand_lms, 5)
+    pinky_mcp = lm_xyz(hand_lms, 17)
+    v1 = (index_mcp[0] - wrist[0], index_mcp[1] - wrist[1], index_mcp[2] - wrist[2])
+    v2 = (pinky_mcp[0] - wrist[0], pinky_mcp[1] - wrist[1], pinky_mcp[2] - wrist[2])
+    nx = (v1[1] * v2[2]) - (v1[2] * v2[1])
+    ny = (v1[2] * v2[0]) - (v1[0] * v2[2])
+    nz = (v1[0] * v2[1]) - (v1[1] * v2[0])
+    norm = math.sqrt((nx * nx) + (ny * ny) + (nz * nz))
+    if norm == 0.0:
+        return False
+    return abs(nz) / norm < max_abs_z
+
+
+def fingers_point_toward_center(
+    hand_lms,
+    toward: str,
+    min_abs_x: float = 0.35,
+    margin: float = 0.02,
+    radial_margin: float = 0.03,
+    min_extended_ratio: float = 0.69,
+) -> bool:
+    wrist = lm_xyz(hand_lms, 0)
+    tips = [lm_xyz(hand_lms, idx) for idx in (8, 12, 16, 20)]
+    avg_tip = (
+        sum(t[0] for t in tips) / len(tips),
+        sum(t[1] for t in tips) / len(tips),
+        sum(t[2] for t in tips) / len(tips),
+    )
+    vx = avg_tip[0] - wrist[0]
+    vy = avg_tip[1] - wrist[1]
+    vz = avg_tip[2] - wrist[2]
+    norm = math.sqrt((vx * vx) + (vy * vy) + (vz * vz))
+    if norm == 0.0:
+        return False
+    fs = get_finger_states(hand_lms, margin, radial_margin)
+    extended_ratio = (sum(1 for v in fs.values() if v) / len(fs)) if fs else 0.0
+    if extended_ratio < min_extended_ratio:
+        return False
+    if abs(vx) / norm < min_abs_x:
+        return False
+    if toward == "right":
+        return vx > 0.0
+    if toward == "left":
+        return vx < 0.0
+    return False
+
+
 def pattern_matches(current: dict, target: Optional[dict], max_mismatches: int = 1) -> bool:
     if target is None:
         return False

@@ -125,9 +125,9 @@ class CalibrationSession:
             {"key": "two_hand_neutral", "prompt": "Two hands: NEUTRAL (thumbs up)", "kind": "two_hand_neutral"},
             {"key": "two_hand_left", "prompt": "Two hands: steer LEFT (rotate wrists)", "kind": "two_hand"},
             {"key": "two_hand_right", "prompt": "Two hands: steer RIGHT (rotate wrists)", "kind": "two_hand"},
-            {"key": "brake_neutral", "prompt": "Two hands: BRAKE in NEUTRAL (index point)", "kind": "brake"},
-            {"key": "brake_left", "prompt": "Two hands: BRAKE while LEFT (index point)", "kind": "brake"},
-            {"key": "brake_right", "prompt": "Two hands: BRAKE while RIGHT (index point)", "kind": "brake"},
+            {"key": "brake_neutral", "prompt": "Two hands: BRAKE in NEUTRAL (thumb up + fingers sideways)", "kind": "brake"},
+            {"key": "brake_left", "prompt": "Two hands: BRAKE while LEFT (thumb up + fingers sideways)", "kind": "brake"},
+            {"key": "brake_right", "prompt": "Two hands: BRAKE while RIGHT (thumb up + fingers sideways)", "kind": "brake"},
         ]
         if not self.waiting_for_start:
             self.start()

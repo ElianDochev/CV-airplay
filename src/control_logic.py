@@ -5,7 +5,17 @@ from typing import Optional, Tuple
 from .calibration import CalibrationData
 from .config_utils import get_cfg
 from .control_types import ControlOutput, ControllerState
-from .hand_utils import clamp, hand_finger_pattern, normalize_angle_deg, pattern_matches, steering_angle_two_hands
+from .hand_utils import (
+    clamp,
+    fingers_point_toward_center,
+    hand_finger_pattern,
+    is_thumb_up,
+    normalize_angle_deg,
+    palm_sideways,
+    pattern_matches,
+    steering_angle_two_hands,
+    thumb_extended,
+)
 
 
 def compute_controls(
@@ -19,6 +29,9 @@ def compute_controls(
     radial_margin = get_cfg(cfg, "finger_extended_radial_margin", 0.03)
     action_margin = get_cfg(cfg, "action_finger_extended_margin", margin)
     action_radial_margin = get_cfg(cfg, "action_finger_extended_radial_margin", radial_margin)
+    palm_sideways_max_abs_z = float(get_cfg(cfg, "brake_palm_sideways_max_abs_z", 0.4))
+    fingers_toward_min_abs_x = float(get_cfg(cfg, "brake_fingers_toward_min_abs_x", 0.35))
+    fingers_toward_min_extended_ratio = float(get_cfg(cfg, "brake_fingers_extended_ratio", 0.69))
     brake = False
     if calibration:
         if left:
@@ -32,7 +45,19 @@ def compute_controls(
                 )
                 if pattern is not None
             )
-            brake = brake or left_brake
+            brake = brake or (
+                left_brake
+                and thumb_extended(left, action_margin, action_radial_margin)
+                and palm_sideways(left, palm_sideways_max_abs_z)
+                and fingers_point_toward_center(
+                    left,
+                    "right",
+                    fingers_toward_min_abs_x,
+                    action_margin,
+                    action_radial_margin,
+                    fingers_toward_min_extended_ratio,
+                )
+            )
         if right:
             right_pattern = hand_finger_pattern(right, action_margin, action_radial_margin)
             right_brake = any(
@@ -44,7 +69,19 @@ def compute_controls(
                 )
                 if pattern is not None
             )
-            brake = brake or right_brake
+            brake = brake or (
+                right_brake
+                and thumb_extended(right, action_margin, action_radial_margin)
+                and palm_sideways(right, palm_sideways_max_abs_z)
+                and fingers_point_toward_center(
+                    right,
+                    "left",
+                    fingers_toward_min_abs_x,
+                    action_margin,
+                    action_radial_margin,
+                    fingers_toward_min_extended_ratio,
+                )
+            )
 
     raw_angle = None
     using = "none"
@@ -54,6 +91,10 @@ def compute_controls(
 
     brake = state.smooth_action(brake, state.brake_hist)
     accel = bool(left and right) and not brake
+    if accel:
+        accel = is_thumb_up(left, action_margin, action_radial_margin) and is_thumb_up(
+            right, action_margin, action_radial_margin
+        )
 
     steer = 0.0
     if raw_angle is not None:

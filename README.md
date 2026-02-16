@@ -5,8 +5,8 @@ Turn two-hand gestures into a racing controller (steering + throttle + brake) in
 ## What It Does
 
 - Tracks up to two hands from a webcam.
-- Computes steering angle from one or two hands.
-- Uses thumb-up wrist rotation for steering and index-pointing for braking.
+- Computes steering angle from two hands (wrist rotation).
+- Uses two thumbs up for accel and thumb-up + fingers sideways for brake.
 - Sends output to a virtual controller backend (uinput on Linux, vgamepad on Windows).
 
 ## Project Structure
@@ -64,7 +64,7 @@ Calibration UI:
 
 - Shows a 3-2-1-GO countdown before each capture stage
 - Shows only the current calibration action
-- Stages: two-hand neutral (thumbs up), two-hand left, two-hand right, brake in neutral, brake while left, brake while right
+- Stages: two-hand neutral (thumbs up), two-hand left/right (rotate wrists), brake in neutral/left/right (thumb up + fingers sideways toward center)
 
 ## Docker (CPU and GPU Profiles)
 
@@ -108,16 +108,67 @@ Notes:
 
 Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost` is not required. If you are running an X server (VcXsrv/Xming), allow local connections in that server's settings.
 
+## How It Works
+
+- **Neutral + accel**: both hands in closed-fist thumbs up, held centered in front of the chest.
+- **Steering**: rotate both wrists together left/right while keeping thumbs up.
+- **Brake**: keep thumb up and turn the palm sideways; fingers point toward the center (left hand fingers point right, right hand fingers point left). Brake can be done while steering.
+
+## Calibration
+
+1. Press `c` to start calibration.
+2. Follow the on-screen prompt for each stage.
+3. Keep both hands visible and centered in the frame.
+
+Stages (in order):
+
+- Two hands: NEUTRAL (thumbs up)
+- Two hands: steer LEFT (rotate wrists)
+- Two hands: steer RIGHT (rotate wrists)
+- Two hands: BRAKE in NEUTRAL (thumb up + fingers sideways)
+- Two hands: BRAKE while LEFT (thumb up + fingers sideways)
+- Two hands: BRAKE while RIGHT (thumb up + fingers sideways)
+
+Calibration data is saved to [calibration/calibration.yml](calibration/calibration.yml). To use a preset, copy [example-calibration/calibration.yml](example-calibration/calibration.yml) into [calibration/calibration.yml](calibration/calibration.yml).
+
 ## Config
 
-The main settings live in `config/main.yml` and control detection thresholds, UI flags, and camera defaults. Control mappings are in `config/controls.yml`. Steering range and preferred hands now come from the calibration file in `calibration/calibration.yml`.
+Main settings live in [config/main.yml](config/main.yml) and control detection thresholds, UI flags, and camera defaults. Control mappings are in [config/controls.yml](config/controls.yml).
 
-To switch between keyboard and joystick output, edit `config/controls.yml`:
+### config/main.yml
 
-- `type: keyboard` for keyboard output
-- `type: gamepad` for joystick output (uses the `gamepad.backend` setting)
+- `max_num_hands`: Max hands to track (2 recommended).
+- `model_complexity`: MediaPipe model size (higher = slower, more accurate).
+- `min_detection_confidence`: Hand detection confidence threshold.
+- `min_tracking_confidence`: Hand tracking confidence threshold.
+- `hand_landmarker_model_path`: Local path to the MediaPipe hand model file.
+- `hand_landmarker_model_url`: Download URL for the MediaPipe hand model.
+- `finger_extended_margin`: Vertical margin to mark a finger as extended (steering/neutral).
+- `finger_extended_radial_margin`: Radial margin to mark a finger as extended (steering/neutral).
+- `action_finger_extended_margin`: Vertical margin for action gestures (brake/accel checks).
+- `action_finger_extended_radial_margin`: Radial margin for action gestures (brake/accel checks).
+- `brake_palm_sideways_max_abs_z`: Palm sideways threshold (lower = stricter).
+- `brake_fingers_toward_min_abs_x`: How strongly fingers must point toward center.
+- `brake_fingers_extended_ratio`: Fraction of fingers that must look extended for brake.
+- `camera_index`: Webcam index.
+- `mirror_input`: Mirror the webcam feed for natural left/right control.
+- `show_ui`: Show the preview window.
+- `draw_landmarks`: Render hand landmarks in the preview.
+- `show_fps`: Display FPS in the preview.
+- `window_name`: Window title for the preview.
+- `controller_backend`: Override control backend (`null` uses controls config).
 
-If you do not want to run the calibration flow yourself, copy `example-calibration/calibration.yml` into the `calibration/` directory. The defaults in that file assume: two thumbs up for neutral, wrist rotation for steering, and index pointing for brake (accel stays on unless braking).
+### config/controls.yml
+
+- `type`: Output type (`keyboard` or `gamepad`).
+- `gamepad.backend`: Gamepad backend (`uinput` on Linux).
+- `keyboard.backend`: Keyboard backend (`auto`, `uinput`, `pynput`).
+- `keyboard.left_key`: Key for steering left.
+- `keyboard.right_key`: Key for steering right.
+- `keyboard.accel_key`: Key for accel.
+- `keyboard.brake_key`: Key for brake.
+- `keyboard.steer_threshold`: Steering threshold to press left/right.
+- `keyboard.steer_hold_threshold`: Higher threshold to force a held left/right press.
 
 ## Notebooks
 
