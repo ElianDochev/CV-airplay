@@ -110,10 +110,12 @@ def compute_controls(
             state.last = output
             return output, using, raw_angle
 
-        delta = normalize_angle_deg(raw_angle - float(neutral))
-        delta = clamp(delta, -max_steer, max_steer)
-        steer = delta / max_steer if max_steer else 0.0
-        steer = state.smooth_steer(steer)
+        if not max_steer:
+            steer = state.smooth_steer(0.0)
+        else:
+            delta = normalize_angle_deg(raw_angle - float(neutral))
+            delta = clamp(delta, -max_steer, max_steer)
+            steer = state.smooth_steer(delta / max_steer)
     else:
         steer = state.smooth_steer(0.0)
 
