@@ -28,15 +28,6 @@ def average_angle_deg(a_deg: float, b_deg: float) -> float:
     return normalize_angle_deg(rad2deg(math.atan2(y, x)))
 
 
-def compute_neutral_and_max(left_deg: float, right_deg: float) -> Tuple[float, float]:
-    neutral = average_angle_deg(left_deg, right_deg)
-    max_delta = max(
-        abs(normalize_angle_deg(left_deg - neutral)),
-        abs(normalize_angle_deg(right_deg - neutral)),
-    )
-    return neutral, max_delta
-
-
 def _get_landmark(hand_lms, idx: int):
     if hasattr(hand_lms, "landmark"):
         return hand_lms.landmark[idx]
