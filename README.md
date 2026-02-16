@@ -6,7 +6,8 @@ Turn two-hand gestures into a racing controller (steering + throttle + brake) in
 
 - Tracks up to two hands from a webcam.
 - Computes steering angle from two hands (wrist rotation).
-- Uses two thumbs up for accel and thumb-up + fingers sideways for brake.
+- Accel is on when both hands are present and brake is off.
+- Brake uses thumb-up + palm sideways with fingers toward center.
 - Sends output to a virtual controller backend (uinput on Linux, vgamepad on Windows).
 
 ## Project Structure
@@ -57,7 +58,7 @@ Controls while running:
 
 - `c` clears calibration and starts the guided calibration flow (controller output disabled while calibrating)
 - `space` toggles controller output (3 second countdown when enabling)
-- two thumbs up (both hands) auto-calibrates neutral steering (only when no calibration file is loaded)
+- two thumbs up (both hands) sets neutral steering
 - `q` quits
 
 Calibration UI:
@@ -104,14 +105,15 @@ Notes:
 
 - Linux requires `/dev/video0` access. Joystick mode also needs `/dev/uinput` access.
 - For joystick mode on Linux, you may need `sudo modprobe uinput` on the host.
-- The container runs headless by default with `--no-show-ui`.
+- The preview window is controlled by `show_ui` and `--show-ui/--no-show-ui`.
 
 Windows note: WSL2 + Docker Desktop typically uses WSLg for GUI apps, so `xhost` is not required. If you are running an X server (VcXsrv/Xming), allow local connections in that server's settings.
 
 ## How It Works
 
-- **Neutral + accel**: both hands in closed-fist thumbs up, held centered in front of the chest.
-- **Steering**: rotate both wrists together left/right while keeping thumbs up.
+- **Neutral**: two thumbs up sets the current neutral steering angle.
+- **Accel**: on when both hands are visible and brake is off.
+- **Steering**: rotate both wrists together left/right.
 - **Brake**: keep thumb up and turn the palm sideways; fingers point toward the center (left hand fingers point right, right hand fingers point left). Brake can be done while steering.
 
 ## Calibration
