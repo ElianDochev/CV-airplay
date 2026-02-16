@@ -91,10 +91,6 @@ def compute_controls(
 
     brake = state.smooth_action(brake, state.brake_hist)
     accel = bool(left and right) and not brake
-    if accel:
-        accel = is_thumb_up(left, action_margin, action_radial_margin) and is_thumb_up(
-            right, action_margin, action_radial_margin
-        )
 
     steer = 0.0
     if raw_angle is not None:
