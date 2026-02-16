@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from .gamepad import GamepadBackend, NullGamepad, create_gamepad_backend
-from .keyboard import KeyboardBackend, NullKeyboard
+from .keyboard import NullKeyboard, create_keyboard_backend
 
 
 class ControlBackend:
@@ -66,12 +66,14 @@ def create_control_backend(controls_cfg: Dict[str, Any], backend_override: Optio
     if control_type == "keyboard":
         keyboard_cfg = _get(controls_cfg, "keyboard", {})
         return KeyboardControl(
-            KeyboardBackend(
+            create_keyboard_backend(
+                name=_get(keyboard_cfg, "backend", None),
                 left_key=_get(keyboard_cfg, "left_key", "left"),
                 right_key=_get(keyboard_cfg, "right_key", "right"),
                 accel_key=_get(keyboard_cfg, "accel_key", "w"),
                 brake_key=_get(keyboard_cfg, "brake_key", "space"),
                 steer_threshold=float(_get(keyboard_cfg, "steer_threshold", 0.2)),
+                steer_hold_threshold=float(_get(keyboard_cfg, "steer_hold_threshold", 0.5)),
             )
         )
 

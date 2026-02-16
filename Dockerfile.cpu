@@ -40,7 +40,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
+RUN chmod +x /app/scripts/docker_entrypoint.sh
+
 ENV CONTROLLER=off
 ENV QT_QPA_FONTDIR=/usr/share/fonts/truetype/dejavu
 
-CMD ["bash", "-lc", "python -m src.app --no-show-ui --controller ${CONTROLLER}"]
+ENTRYPOINT ["/app/scripts/docker_entrypoint.sh"]
