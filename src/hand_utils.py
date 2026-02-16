@@ -3,11 +3,7 @@ from __future__ import annotations
 import math
 from typing import Optional, Tuple
 
-
-def clamp(value: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, value))
-
-
+from control.mapping import clamp
 def rad2deg(rad: float) -> float:
     return rad * 180.0 / math.pi
 
