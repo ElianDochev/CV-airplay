@@ -34,9 +34,6 @@ for arg in "$@"; do
 done
 
 ui_flag=""
-if [[ "${has_ui_flag}" == "false" && -s "${calib_file}" ]]; then
-  ui_flag="--no-show-ui"
-fi
 
 camera_arg=""
 if [[ "${has_camera_flag}" == "false" ]]; then

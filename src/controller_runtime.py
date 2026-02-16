@@ -70,6 +70,8 @@ def run_camera_loop(
         raise RuntimeError("Could not open webcam")
 
     detector = build_hand_landmarker(cfg)
+    if show_ui:
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     try:
         print("Controls:")
         print("  c = recalibrate (clears calibration and restarts)")
