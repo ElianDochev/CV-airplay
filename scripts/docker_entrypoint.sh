@@ -2,7 +2,7 @@
 set -euo pipefail
 
 calib_dir="/app/calibration"
-calib_file="${calib_dir}/calibration.json"
+calib_file="${calib_dir}/calibration.yml"
 model_dir="/tmp/models"
 
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/matplotlib}"
