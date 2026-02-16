@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Optional, Tuple
 
-from control.mapping import clamp
+from .control.mapping import clamp
 def rad2deg(rad: float) -> float:
     return rad * 180.0 / math.pi
 

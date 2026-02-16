@@ -11,16 +11,18 @@ services:
       - /dev/video0:/dev/video0
       - /dev/uinput:/dev/uinput
     environment:
-      - DISPLAY=${DISPLAY}
+      - DISPLAY=${DISPLAY:-:0}
       - SDL_VIDEODRIVER=x11
       - QT_X11_NO_MITSHM=1
       - CONTROLLER=${CONTROLLER:-off}
       - MPLCONFIGDIR=/tmp/matplotlib
+      - XAUTHORITY=/tmp/.Xauthority
     user: "${UID:-1000}:${GID:-1000}"
     group_add:
       - video
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${HOME}/.Xauthority:/tmp/.Xauthority:ro
       - ./calibration:/app/calibration
 
   airdrive-gpu:
@@ -30,10 +32,11 @@ services:
       context: .
       dockerfile: Dockerfile.gpu
     environment:
-      - DISPLAY=${DISPLAY}
+      - DISPLAY=${DISPLAY:-:0}
       - SDL_VIDEODRIVER=x11
       - QT_X11_NO_MITSHM=1
       - CONTROLLER=${CONTROLLER:-off}
+      - XAUTHORITY=/tmp/.Xauthority
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     runtime: nvidia
