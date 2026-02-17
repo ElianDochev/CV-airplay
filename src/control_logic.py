@@ -32,12 +32,13 @@ def compute_controls(
     palm_sideways_max_abs_z = float(get_cfg(cfg, "brake_palm_sideways_max_abs_z", 0.4))
     fingers_toward_min_abs_x = float(get_cfg(cfg, "brake_fingers_toward_min_abs_x", 0.35))
     fingers_toward_min_extended_ratio = float(get_cfg(cfg, "brake_fingers_extended_ratio", 0.69))
+    brake_pattern_max_mismatches = int(get_cfg(cfg, "brake_pattern_max_mismatches", 2))
     brake = False
     if calibration:
         if left:
             left_pattern = hand_finger_pattern(left, action_margin, action_radial_margin)
             left_brake = any(
-                pattern_matches(left_pattern, pattern, max_mismatches=1)
+                pattern_matches(left_pattern, pattern, max_mismatches=brake_pattern_max_mismatches)
                 for pattern in (
                     calibration.brake_neutral_left,
                     calibration.brake_left_left,
@@ -61,7 +62,7 @@ def compute_controls(
         if right:
             right_pattern = hand_finger_pattern(right, action_margin, action_radial_margin)
             right_brake = any(
-                pattern_matches(right_pattern, pattern, max_mismatches=1)
+                pattern_matches(right_pattern, pattern, max_mismatches=brake_pattern_max_mismatches)
                 for pattern in (
                     calibration.brake_neutral_right,
                     calibration.brake_left_right,

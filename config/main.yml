@@ -12,9 +12,10 @@ finger_extended_margin: 0.02
 finger_extended_radial_margin: 0.03
 action_finger_extended_margin: 0.035
 action_finger_extended_radial_margin: 0.05
-brake_palm_sideways_max_abs_z: 0.38
-brake_fingers_toward_min_abs_x: 0.33
-brake_fingers_extended_ratio: 0.42
+brake_palm_sideways_max_abs_z: 0.85
+brake_fingers_toward_min_abs_x: 0.15
+brake_fingers_extended_ratio: 0.25
+brake_pattern_max_mismatches: 2
 
 # Runtime defaults
 camera_index: 0
