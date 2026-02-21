@@ -74,6 +74,12 @@ def create_control_backend(controls_cfg: Dict[str, Any], backend_override: Optio
                 brake_key=_get(keyboard_cfg, "brake_key", "space"),
                 steer_threshold=float(_get(keyboard_cfg, "steer_threshold", 0.2)),
                 steer_hold_threshold=float(_get(keyboard_cfg, "steer_hold_threshold", 0.5)),
+                brake_steer_threshold=float(
+                    _get(keyboard_cfg, "brake_steer_threshold", _get(keyboard_cfg, "steer_threshold", 0.2))
+                ),
+                brake_steer_hold_threshold=float(
+                    _get(keyboard_cfg, "brake_steer_hold_threshold", _get(keyboard_cfg, "steer_hold_threshold", 0.5))
+                ),
             )
         )
 

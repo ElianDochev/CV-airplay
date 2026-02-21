@@ -166,8 +166,6 @@ def steering_angle_two_hands(left_lms, right_lms) -> float:
 
 
 def steering_angle_one_hand(hand_lms) -> float:
-    wrist = lm_xy(hand_lms, 0)
-    index_mcp = lm_xy(hand_lms, 5)
-    pinky_mcp = lm_xy(hand_lms, 17)
-    mid = ((index_mcp[0] + pinky_mcp[0]) / 2.0, (index_mcp[1] + pinky_mcp[1]) / 2.0)
-    return rad2deg(angle_2d(wrist, mid))
+    thumb_mcp = lm_xy(hand_lms, 2)
+    thumb_tip = lm_xy(hand_lms, 4)
+    return rad2deg(angle_2d(thumb_mcp, thumb_tip))

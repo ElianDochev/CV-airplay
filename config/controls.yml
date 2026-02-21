@@ -9,5 +9,7 @@ keyboard:
   right_key: d
   accel_key: w
   brake_key: s
-  steer_threshold: 0.32
-  steer_hold_threshold: 0.32
+  steer_threshold: 0.45
+  steer_hold_threshold: 0.45
+  brake_steer_threshold: 0.3
+  brake_steer_hold_threshold: 0.3

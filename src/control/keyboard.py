@@ -20,6 +20,8 @@ class KeyboardBackend:
         brake_key: str,
         steer_threshold: float,
         steer_hold_threshold: float,
+        brake_steer_threshold: float,
+        brake_steer_hold_threshold: float,
     ):
         self.controller = keyboard.Controller()
         self.left_key = self._parse_key(left_key)
@@ -28,6 +30,8 @@ class KeyboardBackend:
         self.brake_key = self._parse_key(brake_key)
         self.steer_threshold = steer_threshold
         self.steer_hold_threshold = steer_hold_threshold
+        self.brake_steer_threshold = brake_steer_threshold
+        self.brake_steer_hold_threshold = brake_steer_hold_threshold
         self._pressed = set()
 
     def _parse_key(self, name: str):
@@ -47,15 +51,17 @@ class KeyboardBackend:
             self._pressed.remove(key)
 
     def update(self, steer: float, accel: bool, brake: bool) -> None:
-        if steer >= self.steer_hold_threshold:
+        steer_threshold = self.brake_steer_threshold if brake else self.steer_threshold
+        steer_hold_threshold = self.brake_steer_hold_threshold if brake else self.steer_hold_threshold
+        if steer >= steer_hold_threshold:
             left = False
             right = True
-        elif steer <= -self.steer_hold_threshold:
+        elif steer <= -steer_hold_threshold:
             left = True
             right = False
         else:
-            left = steer < -self.steer_threshold
-            right = steer > self.steer_threshold
+            left = steer < -steer_threshold
+            right = steer > steer_threshold
         self._set_key(self.left_key, left)
         self._set_key(self.right_key, right)
         self._set_key(self.accel_key, accel)
@@ -87,6 +93,8 @@ class UInputKeyboard:
         brake_key: str,
         steer_threshold: float,
         steer_hold_threshold: float,
+        brake_steer_threshold: float,
+        brake_steer_hold_threshold: float,
     ):
         if uinput is None:
             raise RuntimeError("python-uinput is not installed")
@@ -97,6 +105,8 @@ class UInputKeyboard:
         self.brake_key = self._parse_key(brake_key)
         self.steer_threshold = steer_threshold
         self.steer_hold_threshold = steer_hold_threshold
+        self.brake_steer_threshold = brake_steer_threshold
+        self.brake_steer_hold_threshold = brake_steer_hold_threshold
         self._pressed = set()
 
         self.device = uinput.Device(
@@ -137,15 +147,17 @@ class UInputKeyboard:
             self._pressed.remove(key)
 
     def update(self, steer: float, accel: bool, brake: bool) -> None:
-        if steer >= self.steer_hold_threshold:
+        steer_threshold = self.brake_steer_threshold if brake else self.steer_threshold
+        steer_hold_threshold = self.brake_steer_hold_threshold if brake else self.steer_hold_threshold
+        if steer >= steer_hold_threshold:
             left = False
             right = True
-        elif steer <= -self.steer_hold_threshold:
+        elif steer <= -steer_hold_threshold:
             left = True
             right = False
         else:
-            left = steer < -self.steer_threshold
-            right = steer > self.steer_threshold
+            left = steer < -steer_threshold
+            right = steer > steer_threshold
         states = [
             (self.left_key, left),
             (self.right_key, right),
@@ -171,6 +183,8 @@ def create_keyboard_backend(
     brake_key: str,
     steer_threshold: float,
     steer_hold_threshold: float,
+    brake_steer_threshold: float,
+    brake_steer_hold_threshold: float,
 ):
     backend_name = (name or "auto").lower().strip()
     if backend_name == "uinput":
@@ -181,6 +195,8 @@ def create_keyboard_backend(
             brake_key,
             steer_threshold,
             steer_hold_threshold,
+            brake_steer_threshold,
+            brake_steer_hold_threshold,
         )
         print(f"[keyboard] backend=uinput keys={left_key},{right_key},{accel_key},{brake_key}")
         return backend
@@ -192,6 +208,8 @@ def create_keyboard_backend(
             brake_key,
             steer_threshold,
             steer_hold_threshold,
+            brake_steer_threshold,
+            brake_steer_hold_threshold,
         )
         print(f"[keyboard] backend=pynput keys={left_key},{right_key},{accel_key},{brake_key}")
         return backend
@@ -205,6 +223,8 @@ def create_keyboard_backend(
                     brake_key,
                     steer_threshold,
                     steer_hold_threshold,
+                    brake_steer_threshold,
+                    brake_steer_hold_threshold,
                 )
                 print(f"[keyboard] backend=uinput keys={left_key},{right_key},{accel_key},{brake_key}")
                 return backend
@@ -217,6 +237,8 @@ def create_keyboard_backend(
             brake_key,
             steer_threshold,
             steer_hold_threshold,
+            brake_steer_threshold,
+            brake_steer_hold_threshold,
         )
         print(f"[keyboard] backend=pynput keys={left_key},{right_key},{accel_key},{brake_key}")
         return backend
